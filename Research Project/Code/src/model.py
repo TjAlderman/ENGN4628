@@ -1,5 +1,7 @@
 import math
 import pandas as pd
+from filter import rolling_avg, normalise
+import matplotlib.pyplot as plt
 
 
 class Controller:
@@ -133,7 +135,7 @@ class HEV:
         # self.r = # Wheel radius
         # self.n = # Gear ratio
         # self.a_n = self.n/self.r
-        return 10
+        return 40
         # v *= 3.6 # m/s to km/h
         # if v<=20:
         #     return 40 # Typical value for wheel radius divided by gear ratio when in 1st gear
@@ -169,11 +171,14 @@ class HEV:
         F = F_t-F_d 
         return F
     
-    def req_power(self, velocity):
-        
-
-        return req_power
-
+    def generate_power_req(self, v):
+        # Compute total torque required
+        w = self._a_n(v)*v # Angular velocity
+        beta = 0.4
+        T_w = self.T_max*(1-beta*(w/self.w_max-1)**2)
+        # Convert torque to power
+        P_w = w*T_w
+        return T_w
 
     @staticmethod
     def decompose_torque(u, T_w):
@@ -181,11 +186,22 @@ class HEV:
         T_e  = T_w - T_m # ICE torque contribution
         return T_e, T_m
     
+    @staticmethod
+    def decompose_power(u,P_w):
+        P_m = u*P_w # EM power contribution
+        P_e  = P_w - P_m # ICE power contribution
+        return P_e, P_m
 
 if __name__=="__main__":
     df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/bugden_3km_loop.csv")
     x = df["time"]
-    y = df["atotal"]
-    c = Controller()
-    total_fuel = c.run_simulation(velocity_profile=y)
-    print(total_fuel)
+    y = df["ax"]+df["ay"]+df["az"]
+    y = rolling_avg(y,N=1000)*40
+    c = HEV()
+    p = c.generate_power_req(y)
+    plt.plot(x,normalise(y),label='Normalised Filtered Acceleration data')
+    plt.plot(x,normalise(p),label='Normalised Req. Power')
+    plt.legend()
+    plt.show()
+    # total_fuel = c.run_simulation(velocity_profile=y)
+    # print(total_fuel)
