@@ -2,6 +2,7 @@ import math
 import pandas as pd
 from filter import rolling_avg, normalise
 import matplotlib.pyplot as plt
+from gps import calculate_velocity
 
 
 class Controller:
@@ -193,14 +194,20 @@ class HEV:
         return P_e, P_m
 
 if __name__=="__main__":
-    df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/bugden_3km_loop.csv")
-    x = df["time"]
-    y = df["ax"]+df["ay"]+df["az"]
-    y = rolling_avg(y,N=1000)*40
+    # df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/bugden_3km_loop.csv")
+    # x = df["time"]
+    # y = df["ax"]+df["ay"]+df["az"]
+    df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/gps_data_1728351441.888126.csv")
+    x = df["timestamp"]
+    x -= x[0]
+    df = calculate_velocity(df)
+    y = df["velocity_m_s"]
+    y = rolling_avg(y,N=10)
+    print(x,y)
     c = HEV()
     p = c.generate_power_req(y)
-    plt.plot(x,normalise(y),label='Normalised Filtered Acceleration data')
-    plt.plot(x,normalise(p),label='Normalised Req. Power')
+    plt.plot(x,y,label='Filtered Velocity data')
+    plt.plot(x,p,label='Req. Power')
     plt.legend()
     plt.show()
     # total_fuel = c.run_simulation(velocity_profile=y)
