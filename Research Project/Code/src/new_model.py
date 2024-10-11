@@ -1,6 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+from filter import normalise
 
 
 class HEV:
@@ -31,6 +32,7 @@ class HEV:
 
     @staticmethod
     def _sgn(x):
+        x = x.copy()
         x[x>0]=1
         x[x<0]=-1
         x[x==0]=0
@@ -66,6 +68,8 @@ class HEV:
         F_g = self.m*self.g*np.sin(alpha)
         F_d = F_r+F_a+F_g
         F = self.m*a
+        print(F)
+        print(F_d)
         F_t = F+F_d
         return F_t
     
@@ -83,15 +87,15 @@ class HEV:
 
 if __name__=="__main__":
     alpha = np.load('Research Project/Code/data/fake-slope.npy')
-    v = np.load('Research Project/Code/data/fake-velocity.npy') 
+    v = np.load('Research Project/Code/data/fake-velocity.npy') # VELOCITY GETS ALTERED BY FN
     a = np.load('Research Project/Code/data/fake-acceleration.npy')
     t = np.load('Research Project/Code/data/fake-time.npy')
     c = HEV()
     F_t = c.force_balance(a=a,v=v,alpha=alpha)
     P = c.generate_power_req(v=v,F_t=F_t)
-    plt.plot(t,v,label='Velocity (m/s)')
-    plt.plot(t,P,label='Req. Power (W)')
-    plt.plot(t,F_t,label='Thrust Force (N)',linestyle='--')
+    plt.plot(t,normalise(v),label='Velocity (m/s)')
+    plt.plot(t,normalise(P),label='Req. Power (W)')
+    plt.plot(t,normalise(F_t),label='Thrust Force (N)',linestyle='--')
     plt.xlabel('Time (seconds)')
     plt.legend()
     plt.show()
