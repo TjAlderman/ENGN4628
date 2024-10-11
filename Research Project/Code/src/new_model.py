@@ -68,8 +68,6 @@ class HEV:
         F_g = self.m*self.g*np.sin(alpha)
         F_d = F_r+F_a+F_g
         F = self.m*a
-        print(F)
-        print(F_d)
         F_t = F+F_d
         return F_t
     
@@ -93,9 +91,9 @@ if __name__=="__main__":
     c = HEV()
     F_t = c.force_balance(a=a,v=v,alpha=alpha)
     P = c.generate_power_req(v=v,F_t=F_t)
-    plt.plot(t,normalise(v),label='Velocity (m/s)')
-    plt.plot(t,normalise(P),label='Req. Power (W)')
-    plt.plot(t,normalise(F_t),label='Thrust Force (N)',linestyle='--')
+    plt.plot(t,v,label='Velocity (m/s)')
+    plt.plot(t,P,label='Req. Power (W)')
+    plt.plot(t,F_t,label='Thrust Force (N)',linestyle='--')
     plt.xlabel('Time (seconds)')
     plt.legend()
     plt.show()
