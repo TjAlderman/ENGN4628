@@ -1,7 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-from filter import normalise
+import pandas as pd
 
 
 class HEV:
@@ -61,6 +61,14 @@ class HEV:
         # Convert torque to power
         P = w*T
         return P
+    
+    def generate_eff_curves(self, v, F_t, t):
+        w = self._a_n(v)*v # Angular velocity
+        P = self.generate_power_req(v=v,F_t=F_t)
+        ice_eff = self.ice_efficiency(P,w,t)
+        em_eff = self.em_efficiency(P,w,t)
+        return ice_eff, em_eff
+        
 
     def force_balance(self, a, v, alpha):
         F_r = self.m*self.g*self.C_r*HEV._sgn(v)
@@ -70,6 +78,23 @@ class HEV:
         F = self.m*a
         F_t = F+F_d
         return F_t
+    
+    @staticmethod
+    def ice_efficiency(P, w, t):
+        """Returns cost to generate required power based on current rotational velocity"""
+        c = 1.56/710 # Cost of petrol per gram ($)
+        b = 1/w # Slower rotational velocity shifts required fuel higher
+        m_f = 7/120*P+b # Fuel flow rate (g/s)
+        dt = np.diff(t)
+        dt = np.append(dt,dt[-1])
+        f = m_f*dt # Total consumed fuel (g)
+        return f*c # Cost ($)
+        
+    @staticmethod
+    def em_efficiency(P, w, t):
+        """Returns cost to generate required power based on current rotational velocity"""
+        m = w/w # Larger values of w give steeper gradient to electric motor efficiency curve
+        return m*P # Relative cost
     
     @staticmethod
     def decompose_torque(u, T_w):
@@ -88,6 +113,11 @@ if __name__=="__main__":
     v = np.load('Research Project/Code/data/fake-velocity.npy') # VELOCITY GETS ALTERED BY FN
     a = np.load('Research Project/Code/data/fake-acceleration.npy')
     t = np.load('Research Project/Code/data/fake-time.npy')
+    df = pd.read_csv("trip1.csv")
+    v = df['v']
+    a = df['a']
+    t = df['t']
+    alpha = df['slope']
     c = HEV()
     F_t = c.force_balance(a=a,v=v,alpha=alpha)
     P = c.generate_power_req(v=v,F_t=F_t)
