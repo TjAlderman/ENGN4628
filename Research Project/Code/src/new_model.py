@@ -64,10 +64,9 @@ class HEV:
     
     def generate_eff_curves(self, v, F_t, t):
         w = self._a_n(v)*v # Angular velocity
-        P = self.generate_power_req(v=v,F_t=F_t)
-        ice_eff = self.ice_efficiency(P,w,t)
-        em_eff = self.em_efficiency(P,w,t)
-        return ice_eff, em_eff
+        ice_eff = self.ice_efficiency(w)
+        ev_eff = self.ev_efficiency(w)
+        return ice_eff, ev_eff
         
 
     def force_balance(self, a, v, alpha):
@@ -79,22 +78,35 @@ class HEV:
         F_t = F+F_d
         return F_t
     
+    # @staticmethod
+    # def ice_efficiency(P, w, t):
+    #     """Returns cost to generate required power based on current rotational velocity"""
+    #     c = 1.56/710 # Cost of petrol per gram ($)
+    #     b = 1/w # Slower rotational velocity shifts required fuel higher
+    #     m_f = 7/120*P+b # Fuel flow rate (g/s)
+    #     dt = np.diff(t)
+    #     dt = np.append(dt,dt[-1])
+    #     f = m_f*dt # Total consumed fuel (g)
+    #     return f*c # Cost ($)
+
     @staticmethod
-    def ice_efficiency(P, w, t):
+    def ice_efficiency(omega):
         """Returns cost to generate required power based on current rotational velocity"""
-        c = 1.56/710 # Cost of petrol per gram ($)
-        b = 1/w # Slower rotational velocity shifts required fuel higher
-        m_f = 7/120*P+b # Fuel flow rate (g/s)
-        dt = np.diff(t)
-        dt = np.append(dt,dt[-1])
-        f = m_f*dt # Total consumed fuel (g)
-        return f*c # Cost ($)
+        b = 1/omega # Slower rotational velocity shifts required fuel higher
+        f = 7/120+b # Fuel flow rate (g/s) / kW
+        return f # Relative costs
         
+    # @staticmethod
+    # def ev_efficiency(P, w, t):
+    #     """Returns cost to generate required power based on current rotational velocity"""
+    #     m = w/w # Larger values of w give steeper gradient to electric motor efficiency curve
+    #     return m*P # Relative cost
+
     @staticmethod
-    def em_efficiency(P, w, t):
+    def ev_efficiency(omega):
         """Returns cost to generate required power based on current rotational velocity"""
-        m = w/w # Larger values of w give steeper gradient to electric motor efficiency curve
-        return m*P # Relative cost
+        m = 1 + 0.1*omega # Larger values of w give steeper gradient to electric motor efficiency curve
+        return m # Relative costs
     
     @staticmethod
     def decompose_torque(u, T_w):
