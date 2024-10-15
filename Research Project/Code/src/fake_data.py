@@ -53,7 +53,7 @@ plt.grid(True)
 plt.show()
 
 # Save the data to .npy files
-np.save('../data/fake-velocity_short_5min.npy', v_interp_short)
-np.save('../data/fake-acceleration_short_5min.npy', a_interp_short)
-np.save('../data/fake-slope_short_5min.npy', alpha_interp_short)
-np.save('../data/fake-time_short_5min.npy', t_interp_short)
+np.save('data/fake-velocity_short_5min.npy', v_interp_short)
+np.save('data/fake-acceleration_short_5min.npy', a_interp_short)
+np.save('data/fake-slope_short_5min.npy', alpha_interp_short)
+np.save('data/fake-time_short_5min.npy', t_interp_short)

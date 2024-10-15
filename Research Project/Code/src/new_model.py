@@ -92,9 +92,11 @@ class HEV:
     @staticmethod
     def ice_efficiency(omega):
         """Returns cost to generate required power based on current rotational velocity"""
-        b = 1/omega # Slower rotational velocity shifts required fuel higher
-        f = 7/120+b # Fuel flow rate (g/s) / kW
+        #b = 1/(1+0.1*omega) # Slower rotational velocity shifts required fuel higher
+        #f = 7/120+b # Fuel flow rate (g/s) / kW
+        f = 2 * np.ones_like(omega)
         return f # Relative costs
+        return 1
         
     # @staticmethod
     # def ev_efficiency(P, w, t):
