@@ -8,8 +8,10 @@ from src.state import HEV
 hybrid = HEV()
 
 w = np.linspace(0,60,600)
-power = hybrid.power_per_torque(w,"EV")
-plt.plot(w,power)
+power_regen = hybrid.power_per_torque(w,"Regen")
+power_ev = hybrid.power_per_torque(w,"EV")
+plt.plot(w,power_regen)
+plt.plot(w,power_ev)
 plt.show()
 
 
