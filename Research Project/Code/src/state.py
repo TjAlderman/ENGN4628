@@ -32,7 +32,7 @@ class HEV:
         # Powertrain parameters
         self.max_ic_torque = 170  # Maximum IC engine torque (Nm)
         self.max_ic_power = 130 # Maximum IC engine power (kW)
-        self.max_ev_torque = 120  # Maximum electric motor torque (Nm)
+        self.max_ev_torque = 200  # Maximum electric motor torque (Nm)
         self.max_ev_power = 100  # Maximum electric motor power (kW)
         self.max_regen_torque = 50  # Maximum regenerative braking torque (Nm)
         self.max_regen_power = 50  # Maximum regenerative braking power (kW)
@@ -83,7 +83,7 @@ class HEV:
 
         # Piecewise relationship (discontinuous, non-linear)
         a_n = np.zeros_like(v)
-        v_kmh = v*3.6
+        v_kmh = v.copy()*3.6
         a_n[v_kmh<=20]=40 # Typical value for wheel radius divided by gear ratio when in 1st gear
         a_n[(v_kmh>20) & (v<=40)] = 25 # Typical value for wheel radius divided by gear ratio when in 2nd gear
         a_n[(v_kmh>40) & (v<=60)] = 16 # Typical value for wheel radius divided by gear ratio when in 3rd gear
@@ -92,19 +92,19 @@ class HEV:
         return a_n
 
     def force_balance(self, a, v, dh):
-        F_r = self.m*self.g*self.C_r*HEV._sgn(v)
-        F_a = 1/2*self.rho*self.C_d*self.A*abs(v)*v
+        F_r = self.m*self.g*self.C_r*HEV._sgn(v.copy())
+        F_a = 1/2*self.rho*self.C_d*self.A*abs(v.copy())*v.copy()
         # F_g = self.m*self.g*np.sin(alpha)
-        F_g = self.m*self.g*dh # dh is the change in elevation (m/s)
+        F_g = self.m*self.g*dh.copy() # dh is the change in elevation (m/s)
         F_d = F_r+F_a+F_g
-        F = self.m*a
+        F = self.m*a.copy()
         F_t = F+F_d
         return F_t
     
     def torque(self, a, v, alpha):
         """Compute total torque required to meet thrust force based on current velocity."""
         # T = self.force_balance(a, v, alpha)/self.r
-        T = self.force_balance(a, v, alpha)/self._a_n(v)
+        T = self.force_balance(a.copy(), v.copy(), alpha.copy())/self._a_n(v.copy())
         return T
     
     def max_torque(self, w, motor="ICE"):
@@ -122,25 +122,25 @@ class HEV:
     
     def w(self,v):
         """Compute angular velocity based on velocity."""
-        w = v/self.r
+        w = v.copy()/self.r
         assert w.all()>=0, "Angular velocity must be positive"
         return w
 
     def power_per_torque(self, w, motor="ICE"): # Needs proper efficiency curves for ICE and REGEN
-        w_relative = w/self.w_max
+        w_relative = w.copy()/self.w_max
         if motor=="EV":
             efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1
         elif motor=="ICE":
             # efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
             efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.2
         elif motor=="Regen":
-            efficiency = (fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1)*0.6
+            efficiency = 1/(0.6*(fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1))
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
 
         assert efficiency.all()>=0 and efficiency.all()<=1, "Efficiency must be between 0 and 1"
 
-        return w/efficiency
+        return w.copy()/efficiency
 
 if __name__=="__main__":
     alpha = np.load('Research Project/Code/data/fake-slope.npy')

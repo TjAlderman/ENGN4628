@@ -55,6 +55,9 @@ def main():
     EV_power_per_torque = hybrid.power_per_torque(w,"EV")
     Regen_power_per_torque = hybrid.power_per_torque(w,"Regen")
 
+    assert IC_power_per_torque.all()>=0 and EV_power_per_torque.all()>=0, "Power per torque must be positive"
+    assert Regen_power_per_torque.all()<=0, "Regen power per torque must be negative"
+
     IC_torque_cost = cost_fuel * IC_power_per_torque
     EV_torque_cost = cost_energy * EV_power_per_torque
     Regen_torque_cost = -cost_energy * Regen_power_per_torque
@@ -100,7 +103,7 @@ def main():
 
     b_charge = np.ones(intervals) * (battery_capacity-initial_charge) # Max charge limit
     b_discharge = np.ones(intervals) * initial_charge # Max discharge limit
-    # b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
+    b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
     b_torque = -T_req # Torque requirement
 
     A = np.concatenate((A_charge, A_discharge, A_torque), axis=0)
