@@ -2,6 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from curve_fit import fit,fitted
 
 
 class HEV:
@@ -29,7 +30,17 @@ class HEV:
         self.T_max = 171 # Max torque of the motor (Nm)
         self.w_max = 439.82 # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
         self.alpha = math.radians(30) # Slope of road (rad)
-
+        
+        # Motor effiency params
+        ev_df = pd.read_csv("../data/electric-motor-eff.csv")
+        ev_efficiencyX = df['efficiencyX']
+        ev_efficiencyY = df['efficiencyY']
+        self.ev_efficiency_params, self.ev_efficiency_mode = fit(ev_efficiencyX,ev_efficiencyY)
+        ice_df = pd.read_csv("../data/ice-motor-eff.csv")
+        ice_efficiencyX = df['efficiencyX']
+        ice_efficiencyY = df['efficiencyY']
+        self.ice_efficiency_params, self.ice_efficiency_mode = fit(ice_efficiencyX,ice_efficiencyY)
+        
     @staticmethod
     def _sgn(x):
         x = x.copy()
@@ -85,17 +96,16 @@ class HEV:
         w = self.w(v)
         P = w*T
         return P
-    
 
-    def power_per_torque(self, w):
-        # power consumed per torque generated based on angular velocity
-        pass
-    
-    def generate_eff_curves(self, v, F_t, t):
-        w = self._a_n(v)*v # Angular velocity
-        ice_eff = self.ice_efficiency(w)
-        ev_eff = self.ev_efficiency(w)
-        return ice_eff, ev_eff
+    def power_per_torque(self, w, motor="ICE"):
+        w_relative = w/self.w_max
+        if motor=="EV":
+            efficiency = fitted(w_relative,*self.ev_efficiency_params,self.ev_efficiency_mode)
+        elif motor=="ICE":
+            efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
+        elif motor=="REGEN":
+            efficiency = fitted(w_relative,*self.ev_efficiency_params,self.ev_efficiency_mode)*0.6
+        return w/efficiency
 
     @staticmethod
     def decompose_torque(u, T_w):
