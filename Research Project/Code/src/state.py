@@ -33,12 +33,12 @@ class HEV:
         
         # Motor effiency params
         ev_df = pd.read_csv("../data/electric-motor-eff.csv")
-        ev_efficiencyX = df['efficiencyX']
-        ev_efficiencyY = df['efficiencyY']
+        ev_efficiencyX = ev_df['efficiencyX']
+        ev_efficiencyY = ev_df['efficiencyY']
         self.ev_efficiency_params, self.ev_efficiency_mode = fit(ev_efficiencyX,ev_efficiencyY)
         ice_df = pd.read_csv("../data/ice-motor-eff.csv")
-        ice_efficiencyX = df['efficiencyX']
-        ice_efficiencyY = df['efficiencyY']
+        ice_efficiencyX = ice_df['efficiencyX']
+        ice_efficiencyY = ice_df['efficiencyY']
         self.ice_efficiency_params, self.ice_efficiency_mode = fit(ice_efficiencyX,ice_efficiencyY)
         
     @staticmethod
