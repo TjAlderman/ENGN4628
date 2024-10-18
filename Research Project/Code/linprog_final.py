@@ -78,8 +78,8 @@ def main():
     A = np.zeros((3*intervals, num_variables))
     b = np.zeros(3*intervals)
 
-    EV_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(EV_power_per_torque)
-    Regen_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(Regen_power_per_torque)
+    EV_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(EV_power_per_torque)@dt
+    Regen_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(Regen_power_per_torque)@dt
     torque_matrix = np.eye(intervals)
 
     A_charge = np.concatenate((np.zeros((intervals, intervals)), -EV_charge_matrix, Regen_charge_matrix), axis=1)
@@ -88,6 +88,7 @@ def main():
 
     b_charge = np.ones(intervals) * (battery_capacity-initial_charge) # Max charge limit
     b_discharge = np.ones(intervals) * -initial_charge # Max discharge limit
+    b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
     b_torque = T_req # Torque requirement
 
     A = np.concatenate((A_charge, A_discharge, A_torque), axis=1)
