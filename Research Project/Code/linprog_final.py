@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
-from src.newer_model import HEV
+from src.state import HEV
 
 def main():
     # Load data
@@ -25,46 +25,58 @@ def main():
         print(f"Error loading data files: {e}")
         sys.exit(1)
 
+    dt = np.diff(ts)  # Assuming constant time step
+    alpha = alpha[1:]
+    v = v[1:]
+    a = a[1:]
+    ts = ts[1:]
+
     # Initialize HEV class
     hybrid = HEV()
 
-    # Calculate torque requirement for each timestep
-    F_t = hybrid.force_balance(a=a, v=v, alpha=alpha)
-    T_req = F_t / hybrid._a_n(v)  # Convert force to torque
-
-    # Visualize torque requirement
-    plt.figure(figsize=(12, 6))
-    plt.plot(ts, T_req, label='Torque Requirement')
-    plt.title('Torque Requirement over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Torque (Nm)')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-    
-    # Set parameters
-    intervals = len(ts)
-    dt = np.diff(ts)  # Assuming constant time step
-    
-    # Get vehicle parameters from the newer_model
+    # Get constants from the newer_model
     battery_capacity = hybrid.battery_capacity
     initial_charge = hybrid.initial_charge
-    max_IC_torque = hybrid.max_torque(v,"IC")
-    max_EV_torque = hybrid.max_torque(v,"EV")
-    max_Regen_torque = hybrid.max_torque(v,"Regen")
     cost_fuel = hybrid.cost_fuel
-    cost_energy = hybrid.cost_battery
+    cost_energy = hybrid.cost_energy
+
+    # Calculate torque requirement for each timestep
+    T_req = hybrid.torque(a,v,alpha)
+    w = hybrid.w(v)
+    a_n = hybrid._a_n(v)
+
+    # Calculate max torque for each timestep
+    T_max_IC = hybrid.max_torque(a_n,"ICE")
+    T_max_EV = hybrid.max_torque(a_n,"EV")
+    T_max_Regen = hybrid.max_torque(a_n,"Regen")
 
     # Get power per torque for IC and EV
-    IC_power_per_torque = hybrid.IC_power_per_torque(v)
-    EV_power_per_torque = hybrid.EV_power_per_torque(v)
-    Regen_power_per_torque = hybrid.Regen_power_per_torque(v)
+    IC_power_per_torque = hybrid.power_per_torque(w,"ICE")
+    EV_power_per_torque = hybrid.power_per_torque(w,"EV")
+    Regen_power_per_torque = hybrid.power_per_torque(w,"Regen")
 
     IC_torque_cost = cost_fuel * IC_power_per_torque
     EV_torque_cost = cost_energy * EV_power_per_torque
     Regen_torque_cost = -cost_energy * Regen_power_per_torque
 
-    # Set up linear optimization
+    # # Visualize torque requirement
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(ts, T_req, label='Torque Requirement')
+    # plt.plot(ts, T_max_IC, label='Max IC Torque', linestyle='--')
+    # plt.plot(ts, T_max_EV, label='Max EV Torque', linestyle=':')
+    # plt.plot(ts, IC_torque_cost, label='IC Torque Cost', linestyle='-.')
+    # plt.plot(ts, EV_torque_cost, label='EV Torque Cost', linestyle='-.')
+    # plt.plot(ts, Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
+    # plt.title('Torque Requirement, Maximum Torques, and Torque Costs over Time')
+    # plt.xlabel('Time (s)')
+    # plt.ylabel('Torque (Nm) / Cost')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+    
+    ########## Linear Programming ##########
+    intervals = len(ts)
+
     num_variables = 3 * intervals  # IC torque, EV torque, regen torque for each interval
 
     # Cost function
@@ -78,29 +90,48 @@ def main():
     A = np.zeros((3*intervals, num_variables))
     b = np.zeros(3*intervals)
 
-    EV_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(EV_power_per_torque)@dt
-    Regen_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(Regen_power_per_torque)@dt
+    EV_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(EV_power_per_torque)@np.diag(dt)
+    Regen_charge_matrix = np.tril(np.ones((intervals, intervals)))@np.diag(Regen_power_per_torque)@np.diag(dt)
     torque_matrix = np.eye(intervals)
 
     A_charge = np.concatenate((np.zeros((intervals, intervals)), -EV_charge_matrix, Regen_charge_matrix), axis=1)
     A_discharge = np.concatenate((np.zeros((intervals, intervals)), EV_charge_matrix, -Regen_charge_matrix), axis=1)
-    A_torque = np.concatenate((torque_matrix, torque_matrix, -torque_matrix), axis=1)
+    A_torque = np.concatenate((-torque_matrix, -torque_matrix, torque_matrix), axis=1)
 
     b_charge = np.ones(intervals) * (battery_capacity-initial_charge) # Max charge limit
-    b_discharge = np.ones(intervals) * -initial_charge # Max discharge limit
+    b_discharge = np.ones(intervals) * initial_charge # Max discharge limit
     b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
     b_torque = T_req # Torque requirement
 
-    A = np.concatenate((A_charge, A_discharge, A_torque), axis=1)
-    b = np.concatenate((b_charge, b_discharge, b_torque), axis=0)
+    A = np.concatenate((A_charge, A_discharge, A_torque), axis=0)
+    b = np.concatenate((b_charge, b_discharge, b_torque), axis=-1)
+
+    # # Constraints (A*x <= b)
+    # A = np.zeros((intervals, num_variables))
+    # b = np.zeros(intervals)
+
+    # # Power constraint matrix
+    # torque_matrix = np.eye(intervals)
+    # A = np.concatenate((-torque_matrix, -torque_matrix, torque_matrix), axis=1)
+
+    # # Power constraint vector (torque requirement)
+    # b = T_req
 
     # Bounds
     lb = np.zeros(num_variables)
-    ub = np.concatenate((max_IC_torque,max_EV_torque,max_Regen_torque))
+    ub = np.concatenate((T_max_IC, T_max_EV, T_max_Regen),axis=-1)
+
+    # Ensure lb and ub have the same shape
+    if lb.shape != ub.shape:
+        print(f"Shape mismatch: lb shape is {lb.shape}, ub shape is {ub.shape}")
+        print(f"T_max_IC shape: {T_max_IC.shape}")
+        print(f"T_max_EV shape: {T_max_EV.shape}")
+        print(f"T_max_Regen shape: {T_max_Regen.shape}")
+        sys.exit(1)
 
     # Solve linear programming problem
     try:
-        res = linprog(f, A_ub=A, b_ub=b, bounds=(lb, ub), method='highs')
+        res = linprog(f, A_ub=A, b_ub=b, bounds=list(zip(lb, ub)))
     except Exception as e:
         print(f"Optimization failed: {e}")
         sys.exit(1)
@@ -114,6 +145,20 @@ def main():
         # Calculate total torque and battery charge
         total_torque = IC_torque + EV_torque - Regen_torque
         battery_charge = initial_charge + np.cumsum(dt * (EV_torque * EV_power_per_torque - Regen_torque * Regen_power_per_torque))
+
+        # Create a simple plot of the optimization outputs against time
+        plt.figure(figsize=(12, 8))
+        plt.plot(ts, IC_torque, label='IC Torque', color='red')
+        plt.plot(ts, EV_torque, label='EV Torque', color='green')
+        plt.plot(ts, -Regen_torque, label='Regen Torque', color='blue')
+        plt.plot(ts, T_req, label='Required Torque', color='black', linestyle='--')
+        
+        plt.xlabel('Time (s)')
+        plt.ylabel('Torque (Nm)')
+        plt.title('Optimization Outputs vs Time')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
         # Plot results
         fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
