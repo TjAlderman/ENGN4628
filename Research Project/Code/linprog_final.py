@@ -100,8 +100,8 @@ def main():
 
     b_charge = np.ones(intervals) * (battery_capacity-initial_charge) # Max charge limit
     b_discharge = np.ones(intervals) * initial_charge # Max discharge limit
-    b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
-    b_torque = T_req # Torque requirement
+    # b_discharge[-1] = 0  # Final charge must be at least as high as initial charge
+    b_torque = -T_req # Torque requirement
 
     A = np.concatenate((A_charge, A_discharge, A_torque), axis=0)
     b = np.concatenate((b_charge, b_discharge, b_torque), axis=-1)

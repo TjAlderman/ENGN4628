@@ -134,7 +134,7 @@ class HEV:
             # efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
             efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.2
         elif motor=="Regen":
-            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.6
+            efficiency = (fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1)*0.6
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
 
