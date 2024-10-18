@@ -2,8 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from curve_fit import fit,fitted
-
+from src.curve_fit import fit,fitted
 
 class HEV:
     """
@@ -25,21 +24,48 @@ class HEV:
         self.g = 9.81 # Gravity acceleration (m/s^2)
         self.C_r = 0.01 # Typical coefficient of rolling friction value
         self.C_d = 0.30 # Typical drag coefficient value
+        self.r = 0.3 # Wheel radius (m)
         self.rho = 1.3 # Density of air (kg/m^3)
         self.A = 2.04 # Frontal area of the car (m^2)
-        self.T_max = 171 # Max torque of the motor (Nm)
         self.w_max = 439.82 # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
-        self.alpha = math.radians(30) # Slope of road (rad)
+
+        # Powertrain parameters
+        self.max_ic_torque = 170  # Maximum IC engine torque (Nm)
+        self.max_ic_power = 130 # Maximum IC engine power (kW)
+        self.max_ev_torque = 120  # Maximum electric motor torque (Nm)
+        self.max_ev_power = 100  # Maximum electric motor power (kW)
+        self.max_regen_torque = 50  # Maximum regenerative braking torque (Nm)
+        self.max_regen_power = 50  # Maximum regenerative braking power (kW)
+        
+        # self.ic_efficiency = 0.35  # IC engine efficiency
+        # self.ev_efficiency = 0.9  # Electric motor efficiency
+        # self.regen_efficiency = 0.7  # Regenerative braking efficiency
         
         # Motor effiency params
-        ev_df = pd.read_csv("../data/electric-motor-eff.csv")
-        ev_efficiencyX = ev_df['efficiencyX']
-        ev_efficiencyY = ev_df['efficiencyY']
+        ev_df = pd.read_csv("data/electric-motor-eff.csv")
+        data = {}
+        for col in ev_df.columns:
+            arr = np.array(ev_df[col])
+            arr = arr[~np.isnan(arr)]
+            data[col]= arr
+        ev_efficiencyX = data['efficiencyX']
+        ev_efficiencyY = data['efficiencyY']
+
         self.ev_efficiency_params, self.ev_efficiency_mode = fit(ev_efficiencyX,ev_efficiencyY)
-        ice_df = pd.read_csv("../data/ice-motor-eff.csv")
-        ice_efficiencyX = ice_df['efficiencyX']
-        ice_efficiencyY = ice_df['efficiencyY']
-        self.ice_efficiency_params, self.ice_efficiency_mode = fit(ice_efficiencyX,ice_efficiencyY)
+        # ice_df = pd.read_csv("../data/ice-motor-eff.csv")
+        # ice_efficiencyX = ice_df['efficiencyX']
+        # ice_efficiencyY = ice_df['efficiencyY']
+        # self.ice_efficiency_params, self.ice_efficiency_mode = fit(ice_efficiencyX,ice_efficiencyY)
+
+        # Battery parameters
+        self.battery_capacity = 3600 * 1000 * 10  # Battery capacity (Ws)
+        self.initial_charge = 0.4 * self.battery_capacity  # Initial charge (60% of capacity)
+        # self.min_charge = 0.2 * self.battery_capacity  # Minimum allowed charge (20% of capacity)
+        # self.max_charge = 0.9 * self.battery_capacity  # Maximum allowed charge (90% of capacity)
+
+        # Cost parameters
+        self.cost_fuel = 1.5 / 1000  # Cost of fuel ($/g)
+        self.cost_energy = 0.15 / (1000*3600)  # Cost of battery usage ($/Ws)
         
     @staticmethod
     def _sgn(x):
@@ -65,59 +91,56 @@ class HEV:
         a_n[v_kmh>80] = 10 # Typical value for wheel radius divided by gear ratio when in 5th gear
         return a_n
 
-    def force_balance(self, a, v, alpha):
+    def force_balance(self, a, v, dh):
         F_r = self.m*self.g*self.C_r*HEV._sgn(v)
         F_a = 1/2*self.rho*self.C_d*self.A*abs(v)*v
-        F_g = self.m*self.g*np.sin(alpha)
+        # F_g = self.m*self.g*np.sin(alpha)
+        F_g = self.m*self.g*dh # dh is the change in elevation (m/s)
         F_d = F_r+F_a+F_g
         F = self.m*a
         F_t = F+F_d
         return F_t
     
-    def max_torque(w):
-        #TODO
-        return 1e10
+    def torque(self, a, v, alpha):
+        """Compute total torque required to meet thrust force based on current velocity."""
+        # T = self.force_balance(a, v, alpha)/self.r
+        T = self.force_balance(a, v, alpha)/self._a_n(v)
+        return T
+    
+    def max_torque(self, w, motor="ICE"):
+        if motor=="ICE":
+            return np.ones_like(w)*self.max_ic_torque
+            #return np.minimum(self.max_ic_torque, self.max_ic_power/w)
+        elif motor=="EV":
+            return np.ones_like(w)*self.max_ev_torque
+            #return np.minimum(self.max_ev_torque, self.max_ev_power/w)
+        elif motor=="Regen":
+            return np.ones_like(w)*self.max_regen_torque
+            #return np.minimum(self.max_regen_torque, self.max_regen_power/w)
+        else:
+            raise Exception(f"Error! Unrecognised motor: {motor}")
     
     def w(self,v):
         """Compute angular velocity based on velocity."""
-        w = self._a_n(v)*v
+        w = v/self.r
+        assert w.all()>=0, "Angular velocity must be positive"
         return w
-    
-    def torque(self, v, F_t):
-        """Compute total torque required to meet thrust force based on current velocity."""
-        w = self.w(v)
-        T = F_t/self._a_n(v)
-        T = np.minimum(T,self.max_torque(w))
-        return T
-    
-    def power(self, v, F_t):
-        """Compute total power required to meet thrust force based on current velocity."""
-        T = self.torque(v=v,F_t=F_t)
-        w = self.w(v)
-        P = w*T
-        return P
 
-    def power_per_torque(self, w, motor="ICE"):
+    def power_per_torque(self, w, motor="ICE"): # Needs proper efficiency curves for ICE and REGEN
         w_relative = w/self.w_max
         if motor=="EV":
-            efficiency = fitted(w_relative,*self.ev_efficiency_params,self.ev_efficiency_mode)
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1
         elif motor=="ICE":
-            efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
-        elif motor=="REGEN":
-            efficiency = fitted(w_relative,*self.ev_efficiency_params,self.ev_efficiency_mode)*0.6
-        return w/efficiency
+            # efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.2
+        elif motor=="Regen":
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.6
+        else:
+            raise Exception(f"Error! Unrecognised motor: {motor}")
 
-    @staticmethod
-    def decompose_torque(u, T_w):
-        T_m = u*T_w # EM torque contribution
-        T_e  = T_w - T_m # ICE torque contribution
-        return T_e, T_m
-    
-    @staticmethod
-    def decompose_power(u,P_w):
-        P_m = u*P_w # EM power contribution
-        P_e  = P_w - P_m # ICE power contribution
-        return P_e, P_m
+        assert efficiency.all()>=0 and efficiency.all()<=1, "Efficiency must be between 0 and 1"
+
+        return w/efficiency
 
 if __name__=="__main__":
     alpha = np.load('Research Project/Code/data/fake-slope.npy')
