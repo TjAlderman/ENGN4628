@@ -13,6 +13,20 @@ def main():
     a = np.load(f'data/fake-acceleration_{data_name}.npy')
     ts = np.load(f'data/fake-time_{data_name}.npy')
 
+    # Initialize HEV class
+    hybrid = HEV()
+
+    # Generate power requirements
+    F_t = hybrid.force_balance(a=a, v=v, alpha=alpha)
+    Ps = hybrid.generate_power_req(v=v, F_t=F_t)
+    Ps = Ps / 1000  # W to kW
+
+    # Generate efficiency curves
+    fuel_rate_IC, fuel_rate_EV = hybrid.generate_eff_curves(v=v, F_t=F_t, t=ts)
+    IC_eff = 1/fuel_rate_IC
+    EV_eff_D = 1/fuel_rate_EV # EV discharging efficiency
+    EV_eff_C = 0.3 # EV charging efficiency
+    
     # Create a visualization for the sample data
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
 
@@ -38,17 +52,7 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # Initialize HEV class
-    hybrid = HEV()
 
-    # Generate power requirements
-    F_t = hybrid.force_balance(a=a, v=v, alpha=alpha)
-    Ps = hybrid.generate_power_req(v=v, F_t=F_t)
-    Ps = Ps / 1000  # W to kW
-
-    # Generate efficiency curves
-    fuel_rate_IC, fuel_rate_EV = hybrid.generate_eff_curves(v=v, F_t=F_t, t=ts)
-    
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
 
     # Plot power and velocity in the first subplot
@@ -64,10 +68,10 @@ def main():
     ax1.set_title('Velocity and Power over Time')
 
     # Plot fuel rates in the second subplot
-    ax2.plot(ts, fuel_rate_IC, label='ICE Fuel Rate', color='green')
-    ax2.plot(ts, fuel_rate_EV, label='EV Fuel Rate', color='orange')
+    ax2.plot(ts, IC_eff, label='ICE efficiency', color='green')
+    ax2.plot(ts, EV_eff_D, label='EV efficiency', color='orange')
     ax2.set_xlabel('Time (s)')
-    ax2.set_ylabel('Fuel Rate')
+    ax2.set_ylabel('Efficiency')
     ax2.legend()
     ax2.set_title('Efficiency Curves over Time')
 
@@ -82,24 +86,25 @@ def main():
     charge_0 = 150 # kWh
 
     cost_fuel = 1.56/710 # Cost of petrol ($/g)
-    cost_battery = 0.28 # Cost of electricity ($/kWh)
+    # cost_battery = 0.28 # Cost of electricity ($/kWh)
+    cost_battery = 0.01 # cost of using battery ($/kWh)
     dt = np.diff(ts)
     dt = dt[0]
-    cost_IC = fuel_rate_IC * cost_fuel
-    cost_EV = fuel_rate_EV * cost_battery
+    # cost_IC = fuel_rate_IC * cost_fuel
+    # cost_EV = fuel_rate_EV * cost_battery
 
     # Set up linear optimization
     intervals = np.size(ts, 0)
 
     # Cost function
     # f = np.concatenate((dt*cost_EV, dt*cost_EV, dt*cost_IC))
-    f = np.concatenate((0.001*cost_EV, 0.001*cost_EV, dt*cost_IC))
+    f = np.concatenate((dt*cost_battery*np.ones(intervals), dt*cost_battery*np.ones(intervals), dt*cost_fuel*np.ones(intervals)))
 
     # Inequality conditions
     A = np.concatenate(
-        (np.concatenate((dt*np.tril(np.ones([intervals,intervals])),-dt*np.tril(np.ones([intervals,intervals])),np.zeros([intervals,intervals])),1), # Charge balance
-        np.concatenate((-dt*np.tril(np.ones([intervals,intervals])),dt*np.tril(np.ones([intervals,intervals])),np.zeros([intervals,intervals])),1), # Charge balance
-        np.concatenate((-1*np.eye(intervals),1*np.eye(intervals),-1*np.eye(intervals)),1)) # Power balance
+        (np.concatenate((dt*EV_eff_C*np.tril(np.ones([intervals,intervals])),-dt*np.tril(np.ones([intervals,intervals])),np.zeros([intervals,intervals])),1), # Charge balance
+        np.concatenate((-dt*EV_eff_C*np.tril(np.ones([intervals,intervals])),dt*np.tril(np.ones([intervals,intervals])),np.zeros([intervals,intervals])),1), # Charge balance
+        np.concatenate((-1*np.eye(intervals),EV_eff_D*np.eye(intervals),-IC_eff*np.eye(intervals)),1)) # Power balance
         ,0)
 
     b = np.concatenate((charge_0*3600*np.ones(intervals),(charge_max-charge_0)*3600*np.ones(intervals),-Ps),0)

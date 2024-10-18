@@ -95,8 +95,8 @@ class HEV:
         #b = 1/(1+0.1*omega) # Slower rotational velocity shifts required fuel higher
         #f = 7/120+b # Fuel flow rate (g/s) / kW
         f = 2 * np.ones_like(omega)
-        return f # Relative costs
-        return 1
+        eff = 1/f
+        return eff # Relative costs
         
     # @staticmethod
     # def ev_efficiency(P, w, t):
@@ -107,10 +107,81 @@ class HEV:
     @staticmethod
     def ev_efficiency(omega):
         """Returns cost to generate required power based on current rotational velocity"""
-        m = 1 + 0.1*omega # Larger values of w give steeper gradient to electric motor efficiency curve
-        return m # Relative costs
+        max_eff = 0.85
+        max_omega = 440 # rpm 
+        x = omega/(max_omega/0.7)
+        a = 2
+
+        y = lambda a : np.exp(a * (x**6-0.7)) - a * x - 1
+        y_scaled = lambda a : max_eff * (y(a) - np.min(y(a))) / (np.max(y(a)) - np.min(y(a)))
+
+        eff = np.clip(y_scaled(a),0.1,1)
+        return eff # Relative costs
     
-    @staticmethod
+    def EV_torque(self, v):
+        """
+        Calculate maximum torque and power per unit torque for the electric motor.
+        
+        Args:
+        v (float): Vehicle velocity in m/s
+        
+        Returns:
+        tuple: (max_torque, power_per_torque)
+            max_torque (float): Maximum torque that can be provided by the electric motor in Nm
+            power_per_torque (float): Power required per unit of torque in W/Nm
+        """
+        # Convert velocity to angular velocity (assuming direct drive)
+        omega = v / (self.wheel_radius * 2 * np.pi) * 60  # Convert to RPM
+
+        # Define EV motor characteristics (these should be adjusted based on actual motor specs)
+        max_power = 100000  # Maximum power in Watts
+        base_speed = 1500  # Base speed in RPM
+        max_speed = 6000  # Maximum speed in RPM
+
+        if omega <= base_speed:
+            max_torque = max_power / (base_speed * 2 * np.pi / 60)
+        else:
+            max_torque = max_power / (omega * 2 * np.pi / 60)
+
+        # Assuming a linear relationship between torque and power
+        power_per_torque = omega * 2 * np.pi / 60  # W/Nm
+
+        return max_torque, power_per_torque
+
+    def IC_torque(self, v):
+        """
+        Calculate maximum torque and power per unit torque for the internal combustion engine.
+        
+        Args:
+        v (float): Vehicle velocity in m/s
+        
+        Returns:
+        tuple: (max_torque, power_per_torque)
+            max_torque (float): Maximum torque that can be provided by the IC engine in Nm
+            power_per_torque (float): Power required per unit of torque in W/Nm
+        """
+        # Use _a_n function to determine the gear ratio
+        gear_ratio = self._a_n(v)
+        
+        # Convert velocity to angular velocity using the determined gear ratio
+        omega = v / (self.wheel_radius * 2 * np.pi) * 60 * gear_ratio  # Convert to RPM
+
+        # Define IC engine characteristics (these should be adjusted based on actual engine specs)
+        max_power = 150000  # Maximum power in Watts
+        torque_peak = 300  # Peak torque in Nm
+        rpm_peak = 4000  # RPM at peak torque
+        max_rpm = 6000  # Maximum engine RPM
+
+        if omega <= rpm_peak:
+            max_torque = torque_peak
+        else:
+            max_torque = max_power / (omega * 2 * np.pi / 60)
+
+        # Assuming a linear relationship between torque and power
+        power_per_torque = omega * 2 * np.pi / 60  # W/Nm
+
+        return max_torque, power_per_torque
+
     def decompose_torque(u, T_w):
         T_m = u*T_w # EM torque contribution
         T_e  = T_w - T_m # ICE torque contribution
