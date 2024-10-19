@@ -32,16 +32,9 @@ class HEV:
         self.w_max = 439.82  # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
 
         # Powertrain parameters
-        self.max_ic_torque = 250  # Maximum IC engine torque (Nm)
-        self.max_ic_power = 130  # Maximum IC engine power (kW)
-        self.max_ev_torque = 200  # Maximum electric motor torque (Nm)
+        self.max_ic_power = 198  # Maximum IC engine power (kW)
         self.max_ev_power = 100  # Maximum electric motor power (kW)
-        self.max_regen_torque = 50  # Maximum regenerative braking torque (Nm)
-        self.max_regen_power = 50  # Maximum regenerative braking power (kW)
-
-        # self.ic_efficiency = 0.35  # IC engine efficiency
-        # self.ev_efficiency = 0.9  # Electric motor efficiency
-        # self.regen_efficiency = 0.7  # Regenerative braking efficiency
+        self.max_regen_power = -50  # Maximum regenerative braking power (kW)
 
         # Motor effiency params
         self.ev_efficiency_params = [
@@ -144,6 +137,11 @@ class HEV:
         # engine - to overcome the disturbance force. Accordingly, the below condition is enforced.
         T[v == 0] = 0
         return T
+    
+    def power(self, a, v, alpha):
+        T = self.torque(a=a,v=v,alpha=alpha)
+        w = self._a_n(v)*v
+        return T*w
 
     def max_torque(self, w, motor="ICE"):
         if motor == "ICE":
@@ -155,6 +153,19 @@ class HEV:
         elif motor == "Regen":
             return np.ones_like(w) * self.max_regen_torque
             # return np.minimum(self.max_regen_torque, self.max_regen_power/w)
+        else:
+            raise Exception(f"Error! Unrecognised motor: {motor}")
+        
+    def max_power(self, w, motor="ICE"):
+        if motor == "ICE":
+            return np.ones_like(w) * self.max_ic_power
+            # return np.minimum(self.max_ic_power, self.max_ic_power/w)
+        elif motor == "EV":
+            return np.ones_like(w) * self.max_ev_power
+            # return np.minimum(self.max_ev_power, self.max_ev_power/w)
+        elif motor == "Regen":
+            return np.ones_like(w) * self.max_regen_power
+            # return np.minimum(self.max_regen_power, self.max_regen_power/w)
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
 

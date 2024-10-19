@@ -25,30 +25,22 @@ def state_dynamics(
     # Get constants from the newer_model
     df.battery_capacity = hybrid.battery_capacity
     df.initial_charge = hybrid.initial_charge
-    df.cost_fuel = hybrid.cost_fuel
-    df.cost_energy = hybrid.cost_energy
 
-    # Calculate torque requirement for each timestep
-    df.T_req = hybrid.torque(a, v, alpha)
+    # Calculate power requirement for each timestep
+    df.P_req = hybrid.power(a, v, alpha)/1000 # W -> kW
     w = hybrid.w(v)
     a_n = hybrid._a_n(v)
 
-    # Calculate max torque for each timestep
-    df.T_max_IC = hybrid.max_torque(a_n, "ICE")
-    df.T_max_EV = hybrid.max_torque(a_n, "EV")
-    df.T_max_Regen = hybrid.max_torque(a_n, "Regen")
+    # Calculate max power for each timestep
+    df.P_max_IC = hybrid.max_power(a_n, "ICE")
+    df.P_max_EV = hybrid.max_power(a_n, "EV")
+    df.P_max_REGEN = hybrid.max_power(a_n, "Regen")
 
-    # Get power per torque for IC and EV
+    # Get efficiency curves for each timestep
     df.IC_efficiency = hybrid.efficiency(w, "ICE")
     df.EV_efficiency = hybrid.efficiency(w, "EV")
-
-    # Hacky
-    df.IC_efficiency[df.IC_efficiency < 0] = 0
-    df.EV_efficiency[df.IC_efficiency < 0] = 0
-    assert (
-        df.IC_efficiency.min() >= 0 and df.EV_efficiency.min() >= 0
-    ), "Power per torque must be positive"
-
+    
+    # Map efficiency curve to arbitrary cost value that gives desired behaviour
     df.IC_efficiency_cost = 1/df.IC_efficiency
     df.EV_efficiency_cost = 1/df.EV_efficiency
     # TJ: assume a flat efficiency curve for regenerative braking
@@ -64,14 +56,14 @@ def state_dynamics(
     if plot:
         # # Visualize torque requirement and costs
         plt.figure(figsize=(9, 8))
-        # plt.plot(t, T_req, label='Torque Requirement')
-        plt.plot(t, df.Regen_efficiency_cost, label="Regen Torque Cost", linestyle="-.")
-        plt.plot(t, df.IC_efficiency_cost, label="IC Torque Cost", linestyle="-.")
-        plt.plot(t, df.EV_efficiency_cost, label="EV Torque Cost")
+        # plt.plot(t, P_req, label='Torque Requirement')
+        plt.plot(t, df.REGEN_efficiency_cost, label="Regen Power Cost", linestyle="-.")
+        plt.plot(t, df.IC_efficiency_cost, label="IC Power Cost", linestyle="-.")
+        plt.plot(t, df.EV_efficiency_cost, label="EV Power Cost")
         # plt.plot(t, hybrid.w(v=v), label='Angular velocity')
-        plt.title("Torque Requirement, Maximum Torques, and Torque Costs over Time")
+        plt.title("Cost Variables")
         plt.xlabel("Time (s)")
-        plt.ylabel("Torque (Nm) / Cost")
+        plt.ylabel("Arbitrary Cost")
         plt.legend()
         plt.grid(True)
         plt.show()
@@ -150,24 +142,24 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         ]
     )  # Used in loop to set initial charge
-    b_eq = [df.initial_charge, df.T_req[0], 0, 0, df.T_req[1], 0, 0]
+    b_eq = [df.initial_charge, df.P_req[0], 0, 0, df.P_req[1], 0, 0]
 
     # Bounds
     ub = [
         df.battery_capacity,
-        200, #EV
+        df.P_max_EV[0], #EV
         0, # REGEN 
-        250, # ICE
+        df.P_max_IC[0], # ICE
         0, # Braking
         df.battery_capacity,
         df.battery_capacity,
-        200,
+        df.P_max_EV[1],
         0,
-        250,
+        df.P_max_IC[1],
         0,
         df.battery_capacity,
     ]
-    lb = [0, 0, -40, 0, -1e7, 0, 0, 0, -40, 0, -1e7, 0]
+    lb = [0, 0, df.P_max_REGEN[0], 0, -1e7, 0, 0, 0, df.P_max_REGEN[1], 0, -1e7, 0]
 
     # Concatenate remaining intervals
     for i in tqdm(range(2, num_intervals), ncols=80):
@@ -189,14 +181,14 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             conservation_bat_q = np.zeros((1, A_eq.shape[1]))
             conservation_bat_q[0, -1] = 1
             A_eq = np.concatenate([A_eq, conservation_bat_q], axis=0)
-            new_b_eq = [df.T_req[i], 0, 0]
+            new_b_eq = [df.P_req[i], 0, 0]
 
         else:
-            new_b_eq = [df.T_req[i], 0]
+            new_b_eq = [df.P_req[i], 0]
         b_eq += new_b_eq
 
-        new_ub = [df.battery_capacity, 200, 0, 250, 0, df.battery_capacity]
-        new_lb = [0, 0, -40, 0, -1e7, 0]
+        new_ub = [df.battery_capacity, df.P_max_EV[i], 0, df.P_max_IC[i], 0, df.battery_capacity]
+        new_lb = [0, 0, df.P_max_REGEN[i], 0, -1e7, 0]
         ub += new_ub
         lb += new_lb
     b_eq = np.array(b_eq)
@@ -212,32 +204,32 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
         # Process results
         reshaped_x = res.x.reshape(num_intervals, num_variables)
         initial_charge = reshaped_x[:, 0]  # initial charge for each interval
-        EV_torque = reshaped_x[:, 1]  # ice_torque for each interval
-        REGEN_torque = reshaped_x[:, 2]  # ev_torque for each interval
-        IC_torque = reshaped_x[:, 3]  # ev_torque for each interval
-        brake_torque = reshaped_x[:, 4]  # final_charge for each interval
+        EV_power = reshaped_x[:, 1]  # ice_power for each interval
+        REGEN_power = reshaped_x[:, 2]  # ev_power for each interval
+        IC_power = reshaped_x[:, 3]  # ev_power for each interval
+        brake_power = reshaped_x[:, 4]  # final_charge for each interval
         final_charge = reshaped_x[:, 5]  # final_charge for each interval
 
-        # Calculate total torque and battery charge
-        total_torque = IC_torque + EV_torque + REGEN_torque
+        # Calculate total power and battery charge
+        total_power = IC_power + EV_power + REGEN_power
 
         if plot:
             # Create a simple plot of the optimization outputs against time
             fig, axs = plt.subplots(2, 1, figsize=(6, 4))
-            axs[0].plot(t[:num_intervals], IC_torque, label="IC Torque", color="red")
-            axs[0].plot(t[:num_intervals], EV_torque, label="EV Torque", color="green")
-            axs[0].plot(t[:num_intervals], REGEN_torque, label="REGEN Torque", color="orange")
-            axs[0].plot(t[:num_intervals], brake_torque, label="Brake Torque", color="blue")
-            # axs[0].plot(t[:num_intervals], total_torque, label="Total Torque", color="blue")
+            axs[0].plot(t[:num_intervals], IC_power, label="IC power", color="red")
+            axs[0].plot(t[:num_intervals], EV_power, label="EV power", color="green")
+            axs[0].plot(t[:num_intervals], REGEN_power, label="REGEN power", color="orange")
+            axs[0].plot(t[:num_intervals], brake_power, label="Brake power", color="blue")
+            # axs[0].plot(t[:num_intervals], total_power, label="Total power", color="blue")
             axs[0].plot(
                 t[:num_intervals],
-                df.T_req[:num_intervals],
-                label="Required Torque",
+                df.P_req[:num_intervals],
+                label="Required power",
                 color="black",
                 linestyle="--",
             )
             axs[0].set_xlabel("Time (s)")
-            axs[0].set_ylabel("Torque (Nm)")
+            axs[0].set_ylabel("Power (kW)")
             axs[0].set_title("Optimization Outputs vs Time")
             axs[0].legend()
             axs[0].grid(True)
@@ -249,7 +241,7 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
                 t[:num_intervals], final_charge, label="Final charge", color="green"
             )
             axs[1].set_xlabel("Time (s)")
-            axs[1].set_ylabel("Charge")
+            axs[1].set_ylabel("Charge (kWh)")
             axs[1].set_title("Optimization Outputs vs Time")
             axs[1].legend()
             axs[1].grid(True)
