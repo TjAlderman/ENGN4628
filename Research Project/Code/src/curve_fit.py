@@ -13,6 +13,7 @@ def fit(x,y):
     params2, cov2 = curve_fit(exponential,x,y,maxfev=1000000)
     rmse2 = np.sqrt(np.mean((y - exponential(x, *params2))**2))
     # return params2.tolist(), "exponential"
+    return params1.tolist(), "polynomial" # Temporary hack
     if rmse1>rmse2:
         return params1.tolist(), "polynomial"
     else:

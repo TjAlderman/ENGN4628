@@ -141,23 +141,3 @@ class HEV:
         assert efficiency.all()>=0 and efficiency.all()<=1, "Efficiency must be between 0 and 1"
 
         return w.copy()/efficiency
-
-if __name__=="__main__":
-    alpha = np.load('Research Project/Code/data/fake-slope.npy')
-    v = np.load('Research Project/Code/data/fake-velocity.npy')
-    a = np.load('Research Project/Code/data/fake-acceleration.npy')
-    t = np.load('Research Project/Code/data/fake-time.npy')
-    df = pd.read_csv("trip1.csv")
-    v = df['v']
-    a = df['a']
-    t = df['t']
-    alpha = df['slope']
-    c = HEV()
-    F_t = c.force_balance(a=a,v=v,alpha=alpha)
-    P = c.generate_power_req(v=v,F_t=F_t)
-    plt.plot(t,v,label='Velocity (m/s)')
-    plt.plot(t,P/1000,label='Req. Power (kW)')
-    plt.plot(t,F_t/1000,label='Thrust Force (kN)',linestyle='--')
-    plt.xlabel('Time (seconds)')
-    plt.legend()
-    plt.show()

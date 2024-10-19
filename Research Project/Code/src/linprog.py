@@ -31,29 +31,37 @@ def main(a,v,alpha,t):
     # Get power per torque for IC and EV
     IC_power_per_torque = hybrid.power_per_torque(w,"ICE")
     EV_power_per_torque = hybrid.power_per_torque(w,"EV")
-    Regen_power_per_torque = hybrid.power_per_torque(w,"Regen")
 
-    assert IC_power_per_torque.all()>=0 and EV_power_per_torque.all()>=0, "Power per torque must be positive"
-    assert Regen_power_per_torque.all()<=0, "Regen power per torque must be negative"
+    # Hacky
+    IC_power_per_torque[IC_power_per_torque<0]=0
+    EV_power_per_torque[IC_power_per_torque<0]=0
+    assert IC_power_per_torque.min()>=0 and EV_power_per_torque.min()>=0, "Power per torque must be positive"
 
     IC_torque_cost = cost_fuel * IC_power_per_torque
     EV_torque_cost = cost_energy * EV_power_per_torque
-    Regen_torque_cost = -cost_energy * Regen_power_per_torque
+    # TJ: assume a flat efficiency curve for regenerative braking
+    # Simplification but not able to find any good sources on efficiency
+    # curves of regenerative breaks. Also just cbf.
+    Regen_power_per_torque = np.ones_like(IC_power_per_torque)*40
+    # TJ: I set regen torque cost to a very small negative value. This way, the optimiser
+    # will always choose to assign free energy to regen (to minimise cost), but it will
+    # never use the IC or EM to generate energy that's put into regen because it costs
+    # more to generate the energy than it will save off regen
+    Regen_torque_cost = -1e-7 * np.ones_like(IC_power_per_torque)
 
     # # Visualize torque requirement
-    # plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(9, 8))
     # plt.plot(t, T_req, label='Torque Requirement')
-    # plt.plot(t, T_max_IC, label='Max IC Torque', linestyle='--')
-    # plt.plot(t, T_max_EV, label='Max EV Torque', linestyle=':')
-    # plt.plot(t, IC_torque_cost, label='IC Torque Cost', linestyle='-.')
-    # plt.plot(t, EV_torque_cost, label='EV Torque Cost', linestyle='-.')
-    # plt.plot(t, Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
-    # plt.title('Torque Requirement, Maximum Torques, and Torque Costs over Time')
-    # plt.xlabel('Time (s)')
-    # plt.ylabel('Torque (Nm) / Cost')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.show()
+    plt.plot(t, Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
+    plt.plot(t, IC_torque_cost, label='IC Torque Cost', linestyle='-.')
+    plt.plot(t, EV_torque_cost, label='EV Torque Cost')
+    plt.plot(t, HEV.w(v=v), label='Angular velocity')
+    plt.title('Torque Requirement, Maximum Torques, and Torque Costs over Time')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Torque (Nm) / Cost')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
     
     ########## Linear Programming ##########
     intervals = len(t)
@@ -128,7 +136,7 @@ def main(a,v,alpha,t):
         battery_charge = initial_charge + np.cumsum(dt * (EV_torque * EV_power_per_torque - Regen_torque * Regen_power_per_torque))
 
         # Create a simple plot of the optimization outputs against time
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(6, 4))
         plt.plot(t, IC_torque, label='IC Torque', color='red')
         plt.plot(t, EV_torque, label='EV Torque', color='green')
         plt.plot(t, -Regen_torque, label='Regen Torque', color='blue')
@@ -142,7 +150,7 @@ def main(a,v,alpha,t):
         plt.show()
 
         # Plot results
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(9, 7), sharex=True)
 
         ax1.plot(t, T_req, label='Required Torque', color='black', linestyle='--')
         ax1.plot(t, IC_torque, label='IC Torque', color='red')
