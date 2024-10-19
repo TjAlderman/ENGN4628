@@ -1,35 +1,13 @@
 import os
+print(os.getcwd())
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
 from src.state import HEV
 
-def main():
-    # Load data
-    data_name = 'short_5min'  # Consider making this a command-line argument
-    fake = True
-
-    try:
-        if fake:
-            alpha = np.load(f'data/fake-slope_{data_name}.npy')
-            v = np.load(f'data/fake-velocity_{data_name}.npy')
-            a = np.load(f'data/fake-acceleration_{data_name}.npy')
-            ts = np.load(f'data/fake-time_{data_name}.npy')
-        else:
-            alpha = np.load(f'data/slope_{data_name}.npy')
-            v = np.load(f'data/velocity_{data_name}.npy')
-            a = np.load(f'data/acceleration_{data_name}.npy')
-            ts = np.load(f'data/time_{data_name}.npy')
-    except FileNotFoundError as e:
-        print(f"Error loading data files: {e}")
-        sys.exit(1)
-
-    dt = np.diff(ts)  # Assuming constant time step
-    alpha = alpha[1:]
-    v = v[1:]
-    a = a[1:]
-    ts = ts[1:]
+def main(a,v,alpha,t):
+    dt = np.concatenate([[1e-7],np.diff(t)])  # Assuming constant time step
 
     # Initialize HEV class
     hybrid = HEV()
@@ -64,12 +42,12 @@ def main():
 
     # # Visualize torque requirement
     # plt.figure(figsize=(12, 6))
-    # plt.plot(ts, T_req, label='Torque Requirement')
-    # plt.plot(ts, T_max_IC, label='Max IC Torque', linestyle='--')
-    # plt.plot(ts, T_max_EV, label='Max EV Torque', linestyle=':')
-    # plt.plot(ts, IC_torque_cost, label='IC Torque Cost', linestyle='-.')
-    # plt.plot(ts, EV_torque_cost, label='EV Torque Cost', linestyle='-.')
-    # plt.plot(ts, Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
+    # plt.plot(t, T_req, label='Torque Requirement')
+    # plt.plot(t, T_max_IC, label='Max IC Torque', linestyle='--')
+    # plt.plot(t, T_max_EV, label='Max EV Torque', linestyle=':')
+    # plt.plot(t, IC_torque_cost, label='IC Torque Cost', linestyle='-.')
+    # plt.plot(t, EV_torque_cost, label='EV Torque Cost', linestyle='-.')
+    # plt.plot(t, Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
     # plt.title('Torque Requirement, Maximum Torques, and Torque Costs over Time')
     # plt.xlabel('Time (s)')
     # plt.ylabel('Torque (Nm) / Cost')
@@ -78,7 +56,7 @@ def main():
     # plt.show()
     
     ########## Linear Programming ##########
-    intervals = len(ts)
+    intervals = len(t)
 
     num_variables = 3 * intervals  # IC torque, EV torque, regen torque for each interval
 
@@ -151,10 +129,10 @@ def main():
 
         # Create a simple plot of the optimization outputs against time
         plt.figure(figsize=(12, 8))
-        plt.plot(ts, IC_torque, label='IC Torque', color='red')
-        plt.plot(ts, EV_torque, label='EV Torque', color='green')
-        plt.plot(ts, -Regen_torque, label='Regen Torque', color='blue')
-        plt.plot(ts, T_req, label='Required Torque', color='black', linestyle='--')
+        plt.plot(t, IC_torque, label='IC Torque', color='red')
+        plt.plot(t, EV_torque, label='EV Torque', color='green')
+        plt.plot(t, -Regen_torque, label='Regen Torque', color='blue')
+        plt.plot(t, T_req, label='Required Torque', color='black', linestyle='--')
         
         plt.xlabel('Time (s)')
         plt.ylabel('Torque (Nm)')
@@ -166,21 +144,21 @@ def main():
         # Plot results
         fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
 
-        ax1.plot(ts, T_req, label='Required Torque', color='black', linestyle='--')
-        ax1.plot(ts, IC_torque, label='IC Torque', color='red')
-        ax1.plot(ts, EV_torque, label='EV Torque', color='green')
-        ax1.plot(ts, -Regen_torque, label='Regen Torque', color='blue')
-        ax1.plot(ts, total_torque, label='Total Torque', color='purple')
+        ax1.plot(t, T_req, label='Required Torque', color='black', linestyle='--')
+        ax1.plot(t, IC_torque, label='IC Torque', color='red')
+        ax1.plot(t, EV_torque, label='EV Torque', color='green')
+        ax1.plot(t, -Regen_torque, label='Regen Torque', color='blue')
+        ax1.plot(t, total_torque, label='Total Torque', color='purple')
         ax1.set_ylabel('Torque (Nm)')
         ax1.legend()
         ax1.set_title('Torque Distribution')
 
-        ax2.plot(ts, battery_charge / 3600, label='Battery Charge')
+        ax2.plot(t, battery_charge / 3600, label='Battery Charge')
         ax2.set_ylabel('Battery Charge (kWh)')
         ax2.legend()
         ax2.set_title('Battery Charge')
 
-        ax3.plot(ts, v, label='Velocity')
+        ax3.plot(t, v, label='Velocity')
         ax3.set_xlabel('Time (s)')
         ax3.set_ylabel('Velocity (m/s)')
         ax3.legend()
@@ -188,16 +166,12 @@ def main():
 
         plt.tight_layout()
         plt.show()
-
-        # Save plots
-        output_dir = 'output'
-        os.makedirs(output_dir, exist_ok=True)
-        plt.savefig(os.path.join(output_dir, f'{data_name}_results.png'))
-        plt.close()
-
-        print(f"Results saved in {output_dir}")
     else:
         print("Optimization failed:", res.message)
 
 if __name__ == "__main__":
-    main()
+    v = sys.argv[2] if len(sys.argv)>2 else np.load(f'/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/trip-velocity.npy')
+    a = sys.argv[3] if len(sys.argv)>3 else np.load(f'/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/trip-acceleration.npy')
+    alpha = sys.argv[1] if len(sys.argv)>1 else np.load(f'/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/trip-slope.npy')
+    t = sys.argv[4] if len(sys.argv)>4 else np.load(f'/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/trip-time.npy')
+    main(v=v,a=a,alpha=alpha,t=t)

@@ -42,7 +42,7 @@ class HEV:
         # self.regen_efficiency = 0.7  # Regenerative braking efficiency
         
         # Motor effiency params
-        ev_df = pd.read_csv("data/electric-motor-eff.csv")
+        ev_df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/electric-motor-eff.csv")
         data = {}
         for col in ev_df.columns:
             arr = np.array(ev_df[col])
@@ -83,7 +83,7 @@ class HEV:
 
         # Piecewise relationship (discontinuous, non-linear)
         a_n = np.zeros_like(v)
-        v_kmh = v.copy()*3.6
+        v_kmh = v*3.6
         a_n[v_kmh<=20]=40 # Typical value for wheel radius divided by gear ratio when in 1st gear
         a_n[(v_kmh>20) & (v<=40)] = 25 # Typical value for wheel radius divided by gear ratio when in 2nd gear
         a_n[(v_kmh>40) & (v<=60)] = 16 # Typical value for wheel radius divided by gear ratio when in 3rd gear
@@ -91,11 +91,11 @@ class HEV:
         a_n[v_kmh>80] = 10 # Typical value for wheel radius divided by gear ratio when in 5th gear
         return a_n
 
-    def force_balance(self, a, v, dh):
+    def force_balance(self, a, v, alpha):
         F_r = self.m*self.g*self.C_r*HEV._sgn(v.copy())
         F_a = 1/2*self.rho*self.C_d*self.A*abs(v.copy())*v.copy()
-        # F_g = self.m*self.g*np.sin(alpha)
-        F_g = self.m*self.g*dh.copy() # dh is the change in elevation (m/s)
+        F_g = self.m*self.g*np.sin(alpha.copy())
+        # F_g = self.m*self.g*dh.copy() # This is incorrect. GPE (mgh) is ENERGY. We want force.
         F_d = F_r+F_a+F_g
         F = self.m*a.copy()
         F_t = F+F_d
