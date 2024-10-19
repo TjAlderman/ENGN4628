@@ -32,7 +32,7 @@ class HEV:
         self.w_max = 439.82  # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
 
         # Powertrain parameters
-        self.max_ic_torque = 170  # Maximum IC engine torque (Nm)
+        self.max_ic_torque = 250  # Maximum IC engine torque (Nm)
         self.max_ic_power = 130  # Maximum IC engine power (kW)
         self.max_ev_torque = 200  # Maximum electric motor torque (Nm)
         self.max_ev_power = 100  # Maximum electric motor power (kW)
@@ -165,10 +165,10 @@ class HEV:
         assert w.all() >= 0, "Angular velocity must be positive"
         return w
 
-    def power_per_torque(
+    def efficiency(
         self, w, motor="ICE"
-    ):  # Needs proper efficiency curves for ICE and REGEN
-        w_relative = w.copy() / self.w_max
+    ):
+        w_relative = w / self.w_max
         if motor == "EV":
             efficiency = fitted(
                 w_relative, self.ev_efficiency_params, self.ev_efficiency_fn
@@ -185,6 +185,4 @@ class HEV:
                 "Error! Efficiency out of valid bounds. This is likely because you passed an unrealistic range of w..."
             )
 
-        power_per_torque = 1 / efficiency  # LEAVE AS 1/eff! DO NOT CHANGE TO w/eff!
-
-        return power_per_torque
+        return efficiency

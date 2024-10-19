@@ -39,35 +39,35 @@ def state_dynamics(
     df.T_max_Regen = hybrid.max_torque(a_n, "Regen")
 
     # Get power per torque for IC and EV
-    df.IC_power_per_torque = hybrid.power_per_torque(w, "ICE")
-    df.EV_power_per_torque = hybrid.power_per_torque(w, "EV")
+    df.IC_efficiency = hybrid.efficiency(w, "ICE")
+    df.EV_efficiency = hybrid.efficiency(w, "EV")
 
     # Hacky
-    df.IC_power_per_torque[df.IC_power_per_torque < 0] = 0
-    df.EV_power_per_torque[df.IC_power_per_torque < 0] = 0
+    df.IC_efficiency[df.IC_efficiency < 0] = 0
+    df.EV_efficiency[df.IC_efficiency < 0] = 0
     assert (
-        df.IC_power_per_torque.min() >= 0 and df.EV_power_per_torque.min() >= 0
+        df.IC_efficiency.min() >= 0 and df.EV_efficiency.min() >= 0
     ), "Power per torque must be positive"
 
-    df.IC_torque_cost = df.IC_power_per_torque
-    df.EV_torque_cost = df.EV_power_per_torque
+    df.IC_efficiency_cost = 1/df.IC_efficiency
+    df.EV_efficiency_cost = 1/df.EV_efficiency
     # TJ: assume a flat efficiency curve for regenerative braking
     # Simplification but not able to find any good sources on efficiency
     # curves of regenerative breaks. Also just cbf.
-    df.Regen_power_per_torque = np.ones_like(df.IC_power_per_torque) * 40
+    df.REGEN_efficiency = np.ones_like(df.IC_efficiency) * 0.4
     # TJ: I set regen torque cost to a very small negative value. This way, the optimiser
     # will always choose to assign free energy to regen (to minimise cost), but it will
     # never use the IC or EM to generate energy that's put into regen because it costs
     # more to generate the energy than it will save off regen
-    df.Regen_torque_cost = -1e-7 * np.ones_like(df.IC_power_per_torque)
+    df.REGEN_efficiency_cost = -1e-7 * np.ones_like(df.IC_efficiency)
 
     if plot:
         # # Visualize torque requirement and costs
         plt.figure(figsize=(9, 8))
         # plt.plot(t, T_req, label='Torque Requirement')
-        plt.plot(t, df.Regen_torque_cost, label="Regen Torque Cost", linestyle="-.")
-        plt.plot(t, df.IC_torque_cost, label="IC Torque Cost", linestyle="-.")
-        plt.plot(t, df.EV_torque_cost, label="EV Torque Cost")
+        plt.plot(t, df.Regen_efficiency_cost, label="Regen Torque Cost", linestyle="-.")
+        plt.plot(t, df.IC_efficiency_cost, label="IC Torque Cost", linestyle="-.")
+        plt.plot(t, df.EV_efficiency_cost, label="EV Torque Cost")
         # plt.plot(t, hybrid.w(v=v), label='Angular velocity')
         plt.title("Torque Requirement, Maximum Torques, and Torque Costs over Time")
         plt.xlabel("Time (s)")
@@ -81,8 +81,8 @@ def state_dynamics(
 
 def linprog_optimiser(df: DataFrame, plot: bool = False):
     num_intervals = len(t)
-    num_intervals = 50  # DEBUGGING
-    num_variables = 4
+    num_intervals = 500  # DEBUGGING
+    num_variables = 6
 
     # Define the first two intervals by hand
     # Cost fn
@@ -90,12 +90,16 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
         [
             [
                 0,
-                df.EV_torque_cost[0],
-                df.IC_torque_cost[0],
+                df.EV_efficiency_cost[0],
+                df.REGEN_efficiency_cost[0],
+                df.IC_efficiency_cost[0],
+                -1e7,
                 0,
                 0,
-                df.EV_torque_cost[1],
-                df.IC_torque_cost[1],
+                df.EV_efficiency_cost[1],
+                df.REGEN_efficiency_cost[1],
+                df.IC_efficiency_cost[1],
+                -1e7,
                 0,
             ]
         ]
@@ -103,39 +107,47 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
     # Inequality conditions
     A = np.array(
         [
-            [-1, -1, 0, 0, 0, 0, 0, 0],  # Initial charge + discharge/charge >= 0
-            [0, 0, 0, 0, -1, -1, 0, 0],
+            [-1, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Initial charge - discharge + charge >= 0
+            [0, 0, 0, 0, 0, 0, -1, 1, -1, 0, 0, 0],
         ]
     )
     b = np.array([[0], [0]])
     # Equality conditions
     A_eq = np.array(
         [
-            [1, 0, 0, 0, 0, 0, 0, 0],  # Initial charge
-            [0, 1, 1, 0, 0, 0, 0, 0],  # ICE+EV=P
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Initial charge
+            [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],  # EV+REGEN+ICE+BRAKES=P
             [
                 1,
                 -1,
+                -1,
+                0,
                 0,
                 -1,
                 0,
                 0,
                 0,
                 0,
-            ],  # initial charge + discharge/charge = final charge
-            [0, 0, 0, 1, -1, 0, 0, 0],  # final charge = initial charge of next state
-            [0, 0, 0, 0, 0, 1, 1, 0],  # ICE+EV=P
+                0,
+                0,
+            ],  # initial charge - discharge + regen = final charge
+            [0, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 0],  # final charge = initial charge of next state
+            [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0],  # EV+REGEN+ICE+BRAKES=P
             [
+                0,
+                0,
                 0,
                 0,
                 0,
                 0,
                 1,
                 -1,
+                -1,
+                0,
                 0,
                 -1,
-            ],  # initial charge + discharge/charge = final charge
-            [0, 0, 0, 0, 0, 0, 0, 1],
+            ],  # initial charge - discharge + regen = final charge
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         ]
     )  # Used in loop to set initial charge
     b_eq = [df.initial_charge, df.T_req[0], 0, 0, df.T_req[1], 0, 0]
@@ -143,32 +155,36 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
     # Bounds
     ub = [
         df.battery_capacity,
-        200,
-        170,
+        200, #EV
+        0, # REGEN 
+        250, # ICE
+        0, # Braking
         df.battery_capacity,
         df.battery_capacity,
         200,
-        170,
+        0,
+        250,
+        0,
         df.battery_capacity,
     ]
-    lb = [0, -40, 0, 0, 0, -40, 0, 0]
+    lb = [0, 0, -40, 0, -1e7, 0, 0, 0, -40, 0, -1e7, 0]
 
     # Concatenate remaining intervals
     for i in tqdm(range(2, num_intervals), ncols=80):
-        new_f = np.array([[0, df.EV_torque_cost[i], df.IC_torque_cost[i], 0]])
+        new_f = np.array([[0, df.EV_efficiency_cost[i], df.REGEN_efficiency_cost[i], df.IC_efficiency_cost[i], -1e7, 0]])
         f = np.concatenate([f, new_f], axis=1)
 
-        new_A = np.array([[-1, -1, 0, 0]])
+        new_A = np.array([[-1, 1, -1, 0, 0, 0]])
         A = block_diag(A, new_A)
 
         new_b = np.array([[0]])
         b = np.concatenate([b, new_b], axis=0)
 
         new_A_eq = np.array(
-            [[0, 1, 1, 0], [1, -1, 0, -1]]  # ICE+EV=P
-        )  # Initial charge + discharge/charge = final charge
+            [[0, 1, 1, 1, 1, 0], [1, -1, -1, 0, 0, -1]]  # EV+REGEN+ICE+BRAKES=P
+        )  # Initial charge - discharge + regen = final charge
         A_eq = block_diag(A_eq, new_A_eq)
-        A_eq[-3, -4] = -1
+        A_eq[-3, -num_variables] = -1
         if not i == num_intervals - 1:
             conservation_bat_q = np.zeros((1, A_eq.shape[1]))
             conservation_bat_q[0, -1] = 1
@@ -179,16 +195,11 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             new_b_eq = [df.T_req[i], 0]
         b_eq += new_b_eq
 
-        new_ub = [df.battery_capacity, 200, 170, df.battery_capacity]
-        new_lb = [0, -40, 0, 0]
+        new_ub = [df.battery_capacity, 200, 0, 250, 0, df.battery_capacity]
+        new_lb = [0, 0, -40, 0, -1e7, 0]
         ub += new_ub
         lb += new_lb
     b_eq = np.array(b_eq)
-
-    np.savetxt("A_eq.csv", A_eq.astype("int8"), fmt="%d", delimiter=",")
-    np.savetxt("B_eq.csv", b_eq.astype("float"), fmt="%d", delimiter=",")
-    np.savetxt("lb.csv", lb, fmt="%d", delimiter=",")
-    np.savetxt("ub.csv", ub, fmt="%d", delimiter=",")
 
     # Solve linear programming problem
     try:
@@ -202,17 +213,22 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
         reshaped_x = res.x.reshape(num_intervals, num_variables)
         initial_charge = reshaped_x[:, 0]  # initial charge for each interval
         EV_torque = reshaped_x[:, 1]  # ice_torque for each interval
-        IC_torque = reshaped_x[:, 2]  # ev_torque for each interval
-        final_charge = reshaped_x[:, 3]  # final_charge for each interval
+        REGEN_torque = reshaped_x[:, 2]  # ev_torque for each interval
+        IC_torque = reshaped_x[:, 3]  # ev_torque for each interval
+        brake_torque = reshaped_x[:, 4]  # final_charge for each interval
+        final_charge = reshaped_x[:, 5]  # final_charge for each interval
 
         # Calculate total torque and battery charge
-        total_torque = IC_torque + EV_torque
+        total_torque = IC_torque + EV_torque + REGEN_torque
 
         if plot:
             # Create a simple plot of the optimization outputs against time
             fig, axs = plt.subplots(2, 1, figsize=(6, 4))
             axs[0].plot(t[:num_intervals], IC_torque, label="IC Torque", color="red")
             axs[0].plot(t[:num_intervals], EV_torque, label="EV Torque", color="green")
+            axs[0].plot(t[:num_intervals], REGEN_torque, label="REGEN Torque", color="orange")
+            axs[0].plot(t[:num_intervals], brake_torque, label="Brake Torque", color="blue")
+            # axs[0].plot(t[:num_intervals], total_torque, label="Total Torque", color="blue")
             axs[0].plot(
                 t[:num_intervals],
                 df.T_req[:num_intervals],
