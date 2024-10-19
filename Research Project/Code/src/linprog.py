@@ -47,16 +47,16 @@ def state_dynamics(
     # Simplification but not able to find any good sources on efficiency
     # curves of regenerative breaks. Also just cbf.
     df.REGEN_efficiency = np.ones_like(df.IC_efficiency) * 0.4
-    # TJ: I set regen torque cost to a very small negative value. This way, the optimiser
+    # TJ: I set regen power cost to a very small negative value. This way, the optimiser
     # will always choose to assign free energy to regen (to minimise cost), but it will
     # never use the IC or EM to generate energy that's put into regen because it costs
     # more to generate the energy than it will save off regen
     df.REGEN_efficiency_cost = -1e-7 * np.ones_like(df.IC_efficiency)
 
     if plot:
-        # # Visualize torque requirement and costs
-        plt.figure(figsize=(9, 8))
-        # plt.plot(t, P_req, label='Torque Requirement')
+        # # Visualize power requirement and costs
+        plt.figure(figsize=(5, 4))
+        # plt.plot(t, P_req, label='Power Requirement')
         plt.plot(t, df.REGEN_efficiency_cost, label="Regen Power Cost", linestyle="-.")
         plt.plot(t, df.IC_efficiency_cost, label="IC Power Cost", linestyle="-.")
         plt.plot(t, df.EV_efficiency_cost, label="EV Power Cost")
@@ -251,7 +251,7 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
 
 
 def main(a: np.ndarray, v: np.ndarray, alpha: np.ndarray, t: np.ndarray):
-    df = state_dynamics(a=a, v=v, alpha=alpha, t=t, plot=False)
+    df = state_dynamics(a=a, v=v, alpha=alpha, t=t, plot=True)
     linprog_optimiser(df=df, plot=True)
 
 
