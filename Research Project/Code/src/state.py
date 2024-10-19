@@ -2,7 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from curve_fit import fit,fitted
+from curve_fit import fitted, polynomial_11th_order, exponential
 
 class HEV:
     """
@@ -42,20 +42,22 @@ class HEV:
         # self.regen_efficiency = 0.7  # Regenerative braking efficiency
         
         # Motor effiency params
-        ev_df = pd.read_csv("/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/electric-motor-eff.csv")
-        data = {}
-        for col in ev_df.columns:
-            arr = np.array(ev_df[col])
-            arr = arr[~np.isnan(arr)]
-            data[col]= arr
-        ev_efficiencyX = data['efficiencyX']
-        ev_efficiencyY = data['efficiencyY']
-
-        self.ev_efficiency_params, self.ev_efficiency_mode = fit(ev_efficiencyX,ev_efficiencyY)
-        # ice_df = pd.read_csv("../data/ice-motor-eff.csv")
-        # ice_efficiencyX = ice_df['efficiencyX']
-        # ice_efficiencyY = ice_df['efficiencyY']
-        # self.ice_efficiency_params, self.ice_efficiency_mode = fit(ice_efficiencyX,ice_efficiencyY)
+        self.ev_efficiency_params = [2.2243057755417857,
+                                    -25.356748782644484,
+                                    212.17047196245966,
+                                    9050.141909040076,
+                                    -9750.385645979311,
+                                    -482.0522333549836,
+                                    11108.662515195841,
+                                    -37891.5628790848,
+                                    65659.30153543796,
+                                    -64053.693755373504,
+                                    33484.631445301995,
+                                    -7314.131523718981,
+                                    -0.019104902301935914]
+        self.ev_efficiency_fn = polynomial_11th_order
+        # self.ice_efficiency_params = [] ?
+        self.ice_efficiency_fn = polynomial_11th_order
 
         # Battery parameters
         self.battery_capacity = 3600 * 1000 * 10  # Battery capacity (Ws)
@@ -135,15 +137,15 @@ class HEV:
     def power_per_torque(self, w, motor="ICE"): # Needs proper efficiency curves for ICE and REGEN
         w_relative = w.copy()/self.w_max
         if motor=="EV":
-            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_fn)+0.1
         elif motor=="ICE":
-            # efficiency = fitted(w_relative,*self.ice_efficiency_params,self.ice_efficiency_mode)
-            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)*0.2
-        elif motor=="Regen":
-            efficiency = 1/(0.6*(fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_mode)+0.1))
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_fn)*0.2
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
 
-        assert efficiency.all()>=0 and efficiency.all()<=1, "Efficiency must be between 0 and 1"
+        if efficiency.min()<=0 or efficiency.max()>=1:
+            raise Exception("Error! Efficiency out of valid bounds. This is likely because you passed an unrealistic range of w...")
 
-        return w.copy()/efficiency
+        power_per_torque = w/efficiency
+        
+        return power_per_torque
