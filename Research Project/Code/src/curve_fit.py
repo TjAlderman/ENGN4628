@@ -7,25 +7,25 @@ def polynomial_11th_order(x,a,b,c,d,e,f,g,h,i,j,k,l,m):
 def exponential(x, a, b, c, d):
     return c*(np.exp(a*(x-b))-a*(x-b)-1)+d
     
-def fit(x,y):
-    params1, cov1 = curve_fit(polynomial_11th_order,x,y,maxfev=1000000)
-    rmse1 = np.sqrt(np.mean((y - polynomial_11th_order(x, *params1))**2))
-    params2, cov2 = curve_fit(exponential,x,y,maxfev=1000000)
-    rmse2 = np.sqrt(np.mean((y - exponential(x, *params2))**2))
-    # return params2.tolist(), "exponential"
-    return params1.tolist(), "polynomial" # Temporary hack
-    if rmse1>rmse2:
-        return params1.tolist(), "polynomial"
-    else:
-        return params2.tolist(), "exponential"
+def fit(x,y,mode='all'):
+    modes = {"polynomial":[polynomial_11th_order],
+              "exponential":[exponential],
+              "all":[polynomial_11th_order,exponential]}
+    params = []
+    rmses = []
+    fns = []
+    for fn in modes[mode]:
+        param, cov = curve_fit(fn,x,y,maxfev=1000000)
+        rmse = np.sqrt(np.mean((y - fn(x, *param))**2))
+        params.append(param)
+        rmses.append(rmse)
+        fns.append(fn)
+    rmses = np.array(rmses)
+    idx = np.argmin(rmses)
+    return params[idx].tolist(), fns[idx]
 
-def fitted(x,params,mode="polynomial"):
-    if mode=="polynomial":
-        return polynomial_11th_order(x,*params)
-    elif mode=="exponential":
-        return exponential(x,*params)
-    else:
-        raise Exception(f"Error! Unrecognised mode: {mode}")
+def fitted(x,params,fn):
+    return fn(x,*params)
 
 
 
