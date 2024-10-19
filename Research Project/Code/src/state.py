@@ -158,6 +158,6 @@ class HEV:
         if efficiency.min()<=0 or efficiency.max()>=1:
             raise Exception("Error! Efficiency out of valid bounds. This is likely because you passed an unrealistic range of w...")
 
-        power_per_torque = w/efficiency
+        power_per_torque = 1/efficiency
         
         return power_per_torque

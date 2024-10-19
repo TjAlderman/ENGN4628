@@ -71,9 +71,7 @@ def state_dynamics(a:np.ndarray,v:np.ndarray,alpha:np.ndarray,t:np.ndarray,plot:
     return df
     
 def linprog_optimiser(df:DataFrame,plot:bool=False):
-    ########## Linear Programming ##########
     intervals = len(t)
-
     num_variables = 3 * intervals  # IC torque, EV torque, regen torque for each interval
 
     # Cost function
@@ -102,17 +100,6 @@ def linprog_optimiser(df:DataFrame,plot:bool=False):
 
     A = np.concatenate((A_charge, A_discharge, A_torque), axis=0)
     b = np.concatenate((b_charge, b_discharge, b_torque), axis=-1)
-
-    # # Constraints (A*x <= b)
-    # A = np.zeros((intervals, num_variables))
-    # b = np.zeros(intervals)
-
-    # # Power constraint matrix
-    # torque_matrix = np.eye(intervals)
-    # A = np.concatenate((-torque_matrix, -torque_matrix, torque_matrix), axis=1)
-
-    # # Power constraint vector (torque requirement)
-    # b = T_req
 
     # Bounds
     lb = np.zeros(num_variables)
