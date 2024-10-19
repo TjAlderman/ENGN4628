@@ -41,8 +41,8 @@ def state_dynamics(a:np.ndarray,v:np.ndarray,alpha:np.ndarray,t:np.ndarray,plot:
     df.EV_power_per_torque[df.IC_power_per_torque<0]=0
     assert df.IC_power_per_torque.min()>=0 and df.EV_power_per_torque.min()>=0, "Power per torque must be positive"
 
-    df.IC_torque_cost = df.cost_fuel * df.IC_power_per_torque
-    df.EV_torque_cost = df.cost_energy * df.EV_power_per_torque
+    df.IC_torque_cost = df.IC_power_per_torque
+    df.EV_torque_cost = df.EV_power_per_torque
     # TJ: assume a flat efficiency curve for regenerative braking
     # Simplification but not able to find any good sources on efficiency
     # curves of regenerative breaks. Also just cbf.
@@ -60,7 +60,7 @@ def state_dynamics(a:np.ndarray,v:np.ndarray,alpha:np.ndarray,t:np.ndarray,plot:
         plt.plot(t, df.Regen_torque_cost, label='Regen Torque Cost', linestyle='-.')
         plt.plot(t, df.IC_torque_cost, label='IC Torque Cost', linestyle='-.')
         plt.plot(t, df.EV_torque_cost, label='EV Torque Cost')
-        plt.plot(t, hybrid.w(v=v), label='Angular velocity')
+        # plt.plot(t, hybrid.w(v=v), label='Angular velocity')
         plt.title('Torque Requirement, Maximum Torques, and Torque Costs over Time')
         plt.xlabel('Time (s)')
         plt.ylabel('Torque (Nm) / Cost')

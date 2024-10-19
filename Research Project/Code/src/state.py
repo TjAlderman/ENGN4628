@@ -42,21 +42,33 @@ class HEV:
         # self.regen_efficiency = 0.7  # Regenerative braking efficiency
         
         # Motor effiency params
-        self.ev_efficiency_params = [2.2243057755417857,
-                                    -25.356748782644484,
-                                    212.17047196245966,
-                                    9050.141909040076,
-                                    -9750.385645979311,
-                                    -482.0522333549836,
-                                    11108.662515195841,
-                                    -37891.5628790848,
-                                    65659.30153543796,
-                                    -64053.693755373504,
-                                    33484.631445301995,
-                                    -7314.131523718981,
-                                    -0.019104902301935914]
+        self.ev_efficiency_params = [1.0377836126858233,
+                                    3.3725996647269003,
+                                    -125.3377229830729,
+                                    -31.97439754268986,
+                                    1047.5495467468147,
+                                    -4417.960397005899,
+                                    11881.843447893687,
+                                    -20654.122370089095,
+                                    23269.366841768202,
+                                    -16415.566485143005,
+                                    6592.164239732642,
+                                    -1150.2844062825682,
+                                    0.8395480040347373]
         self.ev_efficiency_fn = polynomial_11th_order
-        # self.ice_efficiency_params = [] ?
+        self.ice_efficiency_params = [4.295619416199058,
+                                    5.592125774538136,
+                                    -418.6144742131811,
+                                    -24.841274370957077,
+                                    3507.7342899247446,
+                                    -15083.988274998506,
+                                    40180.33730251919,
+                                    -69179.7191035756,
+                                    77292.42489485037,
+                                    -54149.84038625687,
+                                    21622.197497866884,
+                                    -3755.3204098868027,
+                                    0.005205429303159347+0.05]
         self.ice_efficiency_fn = polynomial_11th_order
 
         # Battery parameters
@@ -137,9 +149,9 @@ class HEV:
     def power_per_torque(self, w, motor="ICE"): # Needs proper efficiency curves for ICE and REGEN
         w_relative = w.copy()/self.w_max
         if motor=="EV":
-            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_fn)+0.1
+            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_fn)
         elif motor=="ICE":
-            efficiency = fitted(w_relative,self.ev_efficiency_params,self.ev_efficiency_fn)*0.2
+            efficiency = fitted(w_relative,self.ice_efficiency_params,self.ice_efficiency_fn)
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
 
