@@ -74,7 +74,14 @@ def state_dynamics(
 def linprog_optimiser(df: DataFrame, plot: bool = False):
     num_intervals = len(t)
     num_intervals = 500  # DEBUGGING
-    num_variables = 6
+    num_variables = 6 
+    # VARIABLES:
+    # initial battery charge of timestep (positive), - dummy variable
+    # ev output (positive), 
+    # regen output (negative), 
+    # ice output (positive)
+    # braking output (negative)
+    # final battery charge of timestep (positive) - dummy variable
 
     # Define the first two intervals by hand
     # Cost fn
