@@ -2,7 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from src.curve_fit import fit,fitted
+from curve_fit import fit,fitted
 
 class HEV:
     """
@@ -75,7 +75,8 @@ class HEV:
         x[x==0]=0
         return x
     
-    def _a_n(self, v):
+    @staticmethod
+    def _a_n(v):
         # self.r = # Wheel radius
         # self.n = # Gear ratio
         # self.a_n = self.n/self.r
@@ -104,7 +105,11 @@ class HEV:
     def torque(self, a, v, alpha):
         """Compute total torque required to meet thrust force based on current velocity."""
         # T = self.force_balance(a, v, alpha)/self.r
-        T = self.force_balance(a.copy(), v.copy(), alpha.copy())/self._a_n(v.copy())
+        T = self.force_balance(a,v,alpha)/self._a_n(v)
+        # If the velocity is 0, but the car is on a slope, the required torque will be non-zero
+        # This is not accurate, because in such scenarios the driver will use the brake - not the
+        # engine - to overcome the disturbance force. Accordingly, the below condition is enforced.
+        T[v==0]=0
         return T
     
     def max_torque(self, w, motor="ICE"):
@@ -120,9 +125,10 @@ class HEV:
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
     
-    def w(self,v):
+    def w(self, v):
         """Compute angular velocity based on velocity."""
-        w = v.copy()/self.r
+        # w = v.copy()/self.r
+        w = self._a_n(v)*v
         assert w.all()>=0, "Angular velocity must be positive"
         return w
 
