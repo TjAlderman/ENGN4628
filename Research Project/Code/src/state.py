@@ -30,6 +30,7 @@ class HEV:
         self.rho = 1.3  # Density of air (kg/m^3)
         self.A = 2.04  # Frontal area of the car (m^2)
         self.w_max = 439.82  # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
+        self.P_max = 250
 
         # Powertrain parameters
         self.max_ic_power = 198  # Maximum IC engine power (kW)
@@ -177,19 +178,22 @@ class HEV:
         return w
 
     def efficiency(
-        self, w, motor="ICE"
+        self, P, motor="ICE"
     ):
-        w_relative = w / self.w_max
+        P_relative = P / self.P_max
         if motor == "EV":
             efficiency = fitted(
-                w_relative, self.ev_efficiency_params, self.ev_efficiency_fn
+                P_relative, self.ev_efficiency_params, self.ev_efficiency_fn
             )
+            efficiency = np.ones_like(P)*0.8 # sanity check
         elif motor == "ICE":
             efficiency = fitted(
-                w_relative, self.ice_efficiency_params, self.ice_efficiency_fn
+                P_relative, self.ice_efficiency_params, self.ice_efficiency_fn
             )
         else:
             raise Exception(f"Error! Unrecognised motor: {motor}")
+
+        efficiency[P<0]=1e-7
 
         if efficiency.min() <= 0 or efficiency.max() >= 1:
             raise Exception(

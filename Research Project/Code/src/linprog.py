@@ -37,12 +37,12 @@ def state_dynamics(
     df.P_max_REGEN = hybrid.max_power(a_n, "Regen")
 
     # Get efficiency curves for each timestep
-    df.IC_efficiency = hybrid.efficiency(w, "ICE")
-    df.EV_efficiency = hybrid.efficiency(w, "EV")
+    df.IC_efficiency = hybrid.efficiency(df.P_req, "ICE")
+    df.EV_efficiency = hybrid.efficiency(df.P_req, "EV")
     
     # Map efficiency curve to arbitrary cost value that gives desired behaviour
-    df.IC_efficiency_cost = 1/df.IC_efficiency
-    df.EV_efficiency_cost = 1/df.EV_efficiency
+    df.IC_efficiency_cost = (1/df.IC_efficiency)
+    df.EV_efficiency_cost = (1/df.EV_efficiency)
     # TJ: assume a flat efficiency curve for regenerative braking
     # Simplification but not able to find any good sources on efficiency
     # curves of regenerative breaks. Also just cbf.
@@ -60,7 +60,7 @@ def state_dynamics(
         plt.plot(t, df.REGEN_efficiency_cost, label="Regen Power Cost", linestyle="-.")
         plt.plot(t, df.IC_efficiency_cost, label="IC Power Cost", linestyle="-.")
         plt.plot(t, df.EV_efficiency_cost, label="EV Power Cost")
-        # plt.plot(t, hybrid.w(v=v), label='Angular velocity')
+        plt.plot(t, hybrid.w(v=v), label='Angular velocity')
         plt.title("Cost Variables")
         plt.xlabel("Time (s)")
         plt.ylabel("Arbitrary Cost")
@@ -73,7 +73,7 @@ def state_dynamics(
 
 def linprog_optimiser(df: DataFrame, plot: bool = False):
     num_intervals = len(t)
-    num_intervals = 500  # DEBUGGING
+    # num_intervals = 500  # DEBUGGING
     num_variables = 6 
     # VARIABLES:
     # initial battery charge of timestep (positive), - dummy variable
@@ -227,6 +227,7 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             axs[0].plot(t[:num_intervals], EV_power, label="EV power", color="green")
             axs[0].plot(t[:num_intervals], REGEN_power, label="REGEN power", color="orange")
             axs[0].plot(t[:num_intervals], brake_power, label="Brake power", color="blue")
+            # axs[0].plot(t[:num_intervals], df.IC_efficiency_cost[:num_intervals], label="ICE Arbitrary Cost", color="blue")
             # axs[0].plot(t[:num_intervals], total_power, label="Total power", color="blue")
             axs[0].plot(
                 t[:num_intervals],
