@@ -17,6 +17,10 @@ def state_dynamics(
     a: np.ndarray, v: np.ndarray, alpha: np.ndarray, t: np.ndarray, plot: bool = False
 ) -> DataFrame:
     df = DataFrame()
+    df.a = a
+    df.v = v
+    df.alpha = alpha
+    df.t = t
     df.dt = np.concatenate([[1e-7], np.diff(t)])  # Assuming constant time step
 
     # Initialize HEV class
@@ -25,6 +29,7 @@ def state_dynamics(
     # Get constants from the newer_model
     df.battery_capacity = hybrid.battery_capacity
     df.initial_charge = hybrid.initial_charge
+    df.final_charge = hybrid.final_charge
 
     # Calculate power requirement for each timestep
     df.P_req = hybrid.power(a, v, alpha)/1000 # W -> kW
@@ -57,10 +62,10 @@ def state_dynamics(
         # # Visualize power requirement and costs
         plt.figure(figsize=(5, 4))
         # plt.plot(t, P_req, label='Power Requirement')
-        plt.plot(t, df.REGEN_efficiency_cost, label="Regen Power Cost", linestyle="-.")
-        plt.plot(t, df.IC_efficiency_cost, label="IC Power Cost", linestyle="-.")
+        # plt.plot(t, df.REGEN_efficiency_cost, label="Regen Power Cost", linestyle="-.")
         plt.plot(t, df.EV_efficiency_cost, label="EV Power Cost")
-        plt.plot(t, hybrid.w(v=v), label='Angular velocity')
+        plt.plot(t, df.IC_efficiency_cost, label="IC Power Cost", linestyle="-.")
+        plt.plot(t,df.P_req/(1000*3.6),label="Power Requirement (kWh)")
         plt.title("Cost Variables")
         plt.xlabel("Time (s)")
         plt.ylabel("Arbitrary Cost")
@@ -72,7 +77,7 @@ def state_dynamics(
 
 
 def linprog_optimiser(df: DataFrame, plot: bool = False):
-    num_intervals = len(t)
+    num_intervals = len(df.t)
     # num_intervals = 500  # DEBUGGING
     num_variables = 6 
     # VARIABLES:
@@ -106,8 +111,8 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
     # Inequality conditions
     A = np.array(
         [
-            [-1, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Initial charge - discharge + charge >= 0
-            [0, 0, 0, 0, 0, 0, -1, 1, -1, 0, 0, 0],
+            [-1, 1/(1000*3.6), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Initial charge - discharge >= 0
+            [0, 0, 0, 0, 0, 0, -1, 1/(1000*3.6), 0, 0, 0, 0],
         ]
     )
     b = np.array([[0], [0]])
@@ -118,8 +123,8 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             [0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],  # EV+REGEN+ICE+BRAKES=P
             [
                 1,
-                -1,
-                -1,
+                -1*df.dt[0]/(1000*3.6),
+                -1*df.dt[0]/(1000*3.6),
                 0,
                 0,
                 -1,
@@ -140,8 +145,8 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
                 0,
                 0,
                 1,
-                -1,
-                -1,
+                -1*df.dt[1]/(1000*3.6),
+                -1*df.dt[1]/(1000*3.6),
                 0,
                 0,
                 -1,
@@ -173,14 +178,14 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
         new_f = np.array([[0, df.EV_efficiency_cost[i], df.REGEN_efficiency_cost[i], df.IC_efficiency_cost[i], -1e7, 0]])
         f = np.concatenate([f, new_f], axis=1)
 
-        new_A = np.array([[-1, 1, -1, 0, 0, 0]])
+        new_A = np.array([[-1, 1/(1000*3.6), 0, 0, 0, 0]])
         A = block_diag(A, new_A)
 
         new_b = np.array([[0]])
         b = np.concatenate([b, new_b], axis=0)
 
         new_A_eq = np.array(
-            [[0, 1, 1, 1, 1, 0], [1, -1, -1, 0, 0, -1]]  # EV+REGEN+ICE+BRAKES=P
+            [[0, 1, 1, 1, 1, 0], [1, -1*df.dt[i]/(1000*3.6), -1*df.dt[i]/(1000*3.6), 0, 0, -1]]  # EV+REGEN+ICE+BRAKES=P
         )  # Initial charge - discharge + regen = final charge
         A_eq = block_diag(A_eq, new_A_eq)
         A_eq[-3, -num_variables] = -1
@@ -191,7 +196,10 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             new_b_eq = [df.P_req[i], 0, 0]
 
         else:
-            new_b_eq = [df.P_req[i], 0]
+            conservation_bat_q = np.zeros((1, A_eq.shape[1]))
+            conservation_bat_q[0, -1] = 1
+            A_eq = np.concatenate([A_eq, conservation_bat_q], axis=0)
+            new_b_eq = [df.P_req[i], 0, df.final_charge]
         b_eq += new_b_eq
 
         new_ub = [df.battery_capacity, df.P_max_EV[i], 0, df.P_max_IC[i], 0, df.battery_capacity]

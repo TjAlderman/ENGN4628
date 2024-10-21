@@ -73,10 +73,11 @@ class HEV:
 
         # Battery parameters
         # self.battery_capacity = 3600 * 1000 * 10  # Battery capacity (Ws)
-        self.battery_capacity = 3600
+        self.battery_capacity = 1.0
         self.initial_charge = (
-            0.4 * self.battery_capacity
+            1.0 * self.battery_capacity
         )  # Initial charge (60% of capacity)
+        self.final_charge = 1.0
         # self.min_charge = 0.2 * self.battery_capacity  # Minimum allowed charge (20% of capacity)
         # self.max_charge = 0.9 * self.battery_capacity  # Maximum allowed charge (90% of capacity)
 
@@ -185,7 +186,7 @@ class HEV:
             efficiency = fitted(
                 P_relative, self.ev_efficiency_params, self.ev_efficiency_fn
             )
-            efficiency = np.ones_like(P)*0.8 # sanity check
+            # efficiency = np.ones_like(P)*0.8 # sanity check
         elif motor == "ICE":
             efficiency = fitted(
                 P_relative, self.ice_efficiency_params, self.ice_efficiency_fn
