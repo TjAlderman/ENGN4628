@@ -78,7 +78,7 @@ def state_dynamics(
 
 def linprog_optimiser(df: DataFrame, plot: bool = False):
     num_intervals = len(df.t)
-    # num_intervals = 500  # DEBUGGING
+    # num_intervals = 300  # DEBUGGING
     num_variables = 6 
     # VARIABLES:
     # initial battery charge of timestep (positive), - dummy variable
@@ -196,10 +196,13 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             new_b_eq = [df.P_req[i], 0, 0]
 
         else:
+            # # With final charge constraint
             conservation_bat_q = np.zeros((1, A_eq.shape[1]))
             conservation_bat_q[0, -1] = 1
             A_eq = np.concatenate([A_eq, conservation_bat_q], axis=0)
             new_b_eq = [df.P_req[i], 0, df.final_charge]
+            # # Without final charge constraint
+            # new_b_eq = [df.P_req[i], 0]
         b_eq += new_b_eq
 
         new_ub = [df.battery_capacity, df.P_max_EV[i], 0, df.P_max_IC[i], 0, df.battery_capacity]
@@ -230,11 +233,11 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
 
         if plot:
             # Create a simple plot of the optimization outputs against time
-            fig, axs = plt.subplots(2, 1, figsize=(6, 4))
-            axs[0].plot(t[:num_intervals], IC_power, label="IC power", color="red")
-            axs[0].plot(t[:num_intervals], EV_power, label="EV power", color="green")
-            axs[0].plot(t[:num_intervals], REGEN_power, label="REGEN power", color="orange")
-            axs[0].plot(t[:num_intervals], brake_power, label="Brake power", color="blue")
+            fig, axs = plt.subplots(2, 1, figsize=(8, 4), dpi=300)
+            axs[0].plot(t[:num_intervals], IC_power, label="ICE", color="red")
+            axs[0].plot(t[:num_intervals], EV_power, label="Electric Motor", color="green")
+            axs[0].plot(t[:num_intervals], REGEN_power, label="Regenerative Braking", color="orange")
+            axs[0].plot(t[:num_intervals], brake_power, label="Braking", color="blue")
             # axs[0].plot(t[:num_intervals], df.IC_efficiency_cost[:num_intervals], label="ICE Arbitrary Cost", color="blue")
             # axs[0].plot(t[:num_intervals], total_power, label="Total power", color="blue")
             axs[0].plot(
@@ -246,28 +249,72 @@ def linprog_optimiser(df: DataFrame, plot: bool = False):
             )
             axs[0].set_xlabel("Time (s)")
             axs[0].set_ylabel("Power (kW)")
-            axs[0].set_title("Optimization Outputs vs Time")
-            axs[0].legend()
+            axs[0].set_title("Power Regulation vs Time")
+            axs[0].legend(loc='center left', bbox_to_anchor=(1, 0.5))
             axs[0].grid(True)
 
             axs[1].plot(
-                t[:num_intervals], initial_charge, label="Initial charge", color="red"
+                t[:num_intervals], initial_charge, label="Initial interval charge", color="red"
             )
             axs[1].plot(
-                t[:num_intervals], final_charge, label="Final charge", color="green"
+                t[:num_intervals], final_charge, label="Final interval charge", color="green"
             )
             axs[1].set_xlabel("Time (s)")
             axs[1].set_ylabel("Charge (kWh)")
             axs[1].set_title("Optimization Outputs vs Time")
-            axs[1].legend()
+            axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
             axs[1].grid(True)
-            plt.show()
+            plt.tight_layout()
+            plt.savefig('/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/optimisation-with-constraint.png',transparent=True)
+            plt.close('all')
+            
+            # Create a simple plot of the optimization outputs against time
+            fig, axs = plt.subplots(2, 1, figsize=(8, 4), dpi=300)
+
+            # Create stacked bar plots for power contributions (IC, EV, REGEN, Brake)
+            axs[0].bar(t[:num_intervals], IC_power, label="ICE", color="red", width=1.0, align='center')
+            axs[0].bar(t[:num_intervals], EV_power, bottom=IC_power, label="Electric Motor", color="green", width=1.0, align='center')
+            axs[0].bar(t[:num_intervals], REGEN_power, bottom=0, label="Regenerative Braking", color="orange", width=1.0, align='center')
+            axs[0].bar(t[:num_intervals], brake_power, bottom=0, label="Braking", color="blue", width=1.0, align='center')
+
+            # Plot the total power requirement as a line
+            axs[0].plot(
+                t[:num_intervals],
+                df.P_req[:num_intervals],
+                label="Required power",
+                color="black",
+                linestyle="--",
+            )
+
+            axs[0].set_xlabel("Time (s)")
+            axs[0].set_ylabel("Power (kW)")
+            axs[0].set_title("Power Regulation vs Time")
+            axs[0].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+            axs[0].grid(True)
+
+            # Plot for initial and final battery charge
+            axs[1].plot(
+                t[:num_intervals], initial_charge, label="Initial interval charge", color="red"
+            )
+            axs[1].plot(
+                t[:num_intervals], final_charge, label="Final interval charge", color="green"
+            )
+            axs[1].set_xlabel("Time (s)")
+            axs[1].set_ylabel("Charge (kWh)")
+            axs[1].set_title("Battery Charge vs Time")
+            axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+            axs[1].grid(True)
+
+            plt.tight_layout()
+            plt.savefig('/Users/timothyalder/Documents/ANU/ENGN4628/Research Project/Code/data/optimisation-barplot-with-constraint.png', transparent=True)
+            plt.close('all')
+
     else:
         print("Optimization failed:", res.message)
 
 
 def main(a: np.ndarray, v: np.ndarray, alpha: np.ndarray, t: np.ndarray):
-    df = state_dynamics(a=a, v=v, alpha=alpha, t=t, plot=True)
+    df = state_dynamics(a=a, v=v, alpha=alpha, t=t, plot=False)
     linprog_optimiser(df=df, plot=True)
 
 

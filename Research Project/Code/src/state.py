@@ -22,19 +22,17 @@ class HEV:
 
     def __init__(self):
         # Parameters of a 2003-2008 Toyota Corolla
-        self.m = 1190  # Vehicle mass (kg)
+        self.m = 1660  # Vehicle mass (kg)
         self.g = 9.81  # Gravity acceleration (m/s^2)
         self.C_r = 0.01  # Typical coefficient of rolling friction value
         self.C_d = 0.30  # Typical drag coefficient value
         self.r = 0.3  # Wheel radius (m)
         self.rho = 1.3  # Density of air (kg/m^3)
-        self.A = 2.04  # Frontal area of the car (m^2)
-        self.w_max = 439.82  # Engine speed that produces max torque (rad/s) - correspods to 4200 rpm
-        self.P_max = 250
+        self.A = 2.6588  # Frontal area of the car (m^2)
 
         # Powertrain parameters
-        self.max_ic_power = 198  # Maximum IC engine power (kW)
-        self.max_ev_power = 100  # Maximum electric motor power (kW)
+        self.max_ic_power = 151  # Maximum IC engine power (kW)
+        self.max_ev_power = 155  # Maximum electric motor power (kW)
         self.max_regen_power = -50  # Maximum regenerative braking power (kW)
 
         # Motor effiency params
@@ -181,13 +179,13 @@ class HEV:
     def efficiency(
         self, P, motor="ICE"
     ):
-        P_relative = P / self.P_max
         if motor == "EV":
+            P_relative = P / self.max_ev_power
             efficiency = fitted(
                 P_relative, self.ev_efficiency_params, self.ev_efficiency_fn
             )
-            # efficiency = np.ones_like(P)*0.8 # sanity check
         elif motor == "ICE":
+            P_relative = P / self.max_ic_power
             efficiency = fitted(
                 P_relative, self.ice_efficiency_params, self.ice_efficiency_fn
             )
